@@ -1,0 +1,26 @@
+{
+    "number_of_living_rooms": 1,
+    "living_rooms_plus?" : false,
+    "number_of_bedrooms": 1,
+    "bedrooms_plus?" : false,
+    "number_of_bathrooms": 1,
+    "bathrooms_plus?" : false,
+    "exterior_walls": [
+        [0,0,0,1],
+        [0,1,1,1],
+        [1,1,1,0],
+        [1,0,0,0]
+    ],
+    "connections": [
+        [0, 3, 1, 0],
+        [2, 0, 1, 0],
+        [2, 0, 1, 1],
+        [2, 0, 1, 2],
+        [3, 0, 1, 1],
+        [4, 0, 1, 2],
+        [3, 0, 0, 0],
+        [4, 0, 0, 2]
+    ]
+}
+
+
