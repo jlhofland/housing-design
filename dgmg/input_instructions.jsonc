@@ -1,0 +1,33 @@
+// THIS FILE CANNOT BE PARSED WITH JSON - JUST FOR REFERENCE
+{
+    "number_of_living_rooms": 1,
+    "living_rooms_plus?" : false,
+    "number_of_bedrooms": 1,
+    "bedrooms_plus?" : false,
+    "number_of_bathrooms": 1,
+    "bathrooms_plus?" : false,
+    "exterior_walls": [
+        // Input exterior walls as a list of pairs of coordinates [ [ xi_0, yi_0, xf_0, yf_0 ], [ xi_1, yi_1, xf_1, yf_1 ] , … ]. 
+        // Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
+        [0,0,0,1],
+        [0,1,1,1],
+        [1,1,1,0],
+        [1,0,0,0]
+    ],
+    "connections": [
+        // [room_type, room_index, room_type, room_index]
+        // Room types: 0 == exterior_wall, 1 == door, 2 == living_room, 3 == bedroom, 4 == bathroom 
+        [0, 3, 1, 0],
+        [2, 0, 1, 0],
+        [2, 0, 1, 1],
+        [2, 0, 1, 2],
+        [3, 0, 1, 1],
+        [4, 0, 1, 2],
+        [3, 0, 0, 0],
+        [4, 0, 0, 2]
+    ]
+}
+
+/*
+And so we then expect to 
+*/
