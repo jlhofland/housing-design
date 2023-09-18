@@ -47,44 +47,44 @@ def check_house(g):
     return True
 
 
-def get_decision_sequence(size):
+# def get_decision_sequence(size):
 
-    # This "decision sequence" is a set of sequential instructions to be processed by DGMG to generate a house-type graph.
+#     # This "decision sequence" is a set of sequential instructions to be processed by DGMG to generate a house-type graph.
 
-    """
-    Get the decision sequence for generating valid houses with DGMG for teacher
-    forcing optimization.
-    """
-    decision_sequence = []
+#     """
+#     Get the decision sequence for generating valid houses with DGMG for teacher
+#     forcing optimization.
+#     """
+#     decision_sequence = []
 
-    for i in range(size):
-        decision_sequence.append(0)  # Add node
+#     for i in range(size):
+#         decision_sequence.append(0)  # Add node
 
-        if i != 0:
-            decision_sequence.append(0)  # Add edge
-            decision_sequence.append(
-                i - 1
-            )  # Set destination to be previous node.
+#         if i != 0:
+#             decision_sequence.append(0)  # Add edge
+#             decision_sequence.append(
+#                 i - 1
+#             )  # Set destination to be previous node.
 
-        if i == size - 1:
-            decision_sequence.append(0)  # Add edge
-            decision_sequence.append(0)  # Set destination to be the root.
+#         if i == size - 1:
+#             decision_sequence.append(0)  # Add edge
+#             decision_sequence.append(0)  # Set destination to be the root.
 
-        decision_sequence.append(1)  # Stop adding edge
+#         decision_sequence.append(1)  # Stop adding edge
 
-    decision_sequence.append(1)  # Stop adding node
+#     decision_sequence.append(1)  # Stop adding node
 
-    return decision_sequence
+#     return decision_sequence
 
 
-def generate_dataset(v_min, v_max, n_samples, fname):
-    samples = []
-    for _ in range(n_samples):
-        size = random.randint(v_min, v_max)
-        samples.append(get_decision_sequence(size))
+# def generate_dataset(v_min, v_max, n_samples, fname):
+#     samples = []
+#     for _ in range(n_samples):
+#         size = random.randint(v_min, v_max)
+#         samples.append(get_decision_sequence(size))
 
-    with open(fname, "wb") as f:
-        pickle.dump(samples, f)
+#     with open(fname, "wb") as f:
+#         pickle.dump(samples, f)
 
 
 class HouseDataset(Dataset):
@@ -108,13 +108,13 @@ class HouseDataset(Dataset):
         return batch
 
 
-def dglGraph_to_adj_list(g):
-    adj_list = {}
-    for node in range(g.num_nodes()):
-        # For undirected graph. successors and
-        # predecessors are equivalent.
-        adj_list[node] = g.successors(node).tolist()
-    return adj_list
+# def dglGraph_to_adj_list(g):
+#     adj_list = {}
+#     for node in range(g.num_nodes()):
+#         # For undirected graph. successors and
+#         # predecessors are equivalent.
+#         adj_list[node] = g.successors(node).tolist()
+#     return adj_list
 
 
 class HouseModelEvaluation(object):

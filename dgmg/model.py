@@ -6,7 +6,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
+class LSTMEncoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(LSTMEncoder, self).__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
 
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        return out[-1, :]  # Take the last output of the sequence
+    
 class ConditionVec(nn.Module):
     def __init__(self, file_name):
         import json
@@ -40,15 +48,6 @@ class ConditionVec(nn.Module):
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
         lstm_hidden_units = 64  # Adjust as needed
-
-        class LSTMEncoder(nn.Module):
-            def __init__(self, input_dim, hidden_dim):
-                super(LSTMEncoder, self).__init__()
-                self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
-
-            def forward(self, x):
-                out, _ = self.lstm(x)
-                return out[-1, :]  # Take the last output of the sequence
 
         # Encode the sequences
         exterior_walls_encoder = LSTMEncoder(input_dim=4, hidden_dim=lstm_hidden_units)
@@ -164,7 +163,7 @@ class AddNode(nn.Module):
         super(AddNode, self).__init__()
 
         #ALEX: Add parametric number of nodes
-        n_node_types = 5
+        n_node_types = 6
         self.graph_op = {"embed": graph_embed_func}
         self.conditioning_vector = conditioning_vector
 
@@ -177,7 +176,7 @@ class AddNode(nn.Module):
         #ALEX Here is where we add *space* for node features
         #ALEX OR maybe we do not, and instead the features are added as a separate 
         self.initialize_hv = nn.Linear(
-            node_hidden_size + graph_embed_func.graph_hidden_size + conditioning_vector.shape[-1],
+            node_hidden_size + graph_embed_func.graph_hidden_size + self.conditioning_vector.shape[-1],
             node_hidden_size,
         )
 
@@ -185,10 +184,10 @@ class AddNode(nn.Module):
 
     def _initialize_node_repr(self, g, node_type, graph_embed):
         num_nodes = g.num_nodes()
-
         #ALEX This function passes through a linear layer a node_embed_CAT_graph_embed to calculate an initial hv
         #ALEX Here is where we would add node features
         #ALEX This is where we would add our conditioning vector, c
+        print(f"NodeType: {node_type}")
         hv_init = self.initialize_hv(
             torch.cat(
                 [
@@ -212,7 +211,7 @@ class AddNode(nn.Module):
         graph_embed = self.graph_op["embed"](g)
 
         logits = self.add_node(graph_embed)
-        probs = F.softmax(logits)
+        probs = F.softmax(logits, dim=1)
 
         if not self.training:
             action = Categorical(probs).sample().item()
@@ -233,9 +232,10 @@ class AddEdge(nn.Module):
     def __init__(self, graph_embed_func, node_hidden_size):
         super(AddEdge, self).__init__()
 
+        self.num_edge_types = 3
         self.graph_op = {"embed": graph_embed_func}
         self.add_edge = nn.Linear(
-            graph_embed_func.graph_hidden_size + node_hidden_size, 1
+            graph_embed_func.graph_hidden_size + node_hidden_size, self.num_edge_types + 1
         )
 
     def prepare_training(self):
@@ -245,15 +245,16 @@ class AddEdge(nn.Module):
         graph_embed = self.graph_op["embed"](g)
         src_embed = g.nodes[g.num_nodes() - 1].data["hv"]
 
-        logit = self.add_edge(torch.cat([graph_embed, src_embed], dim=1))
-        prob = torch.sigmoid(logit)
+        logits = self.add_edge(torch.cat([graph_embed, src_embed], dim=1))
+        probs = F.softmax(logits, dim=1)
 
         if not self.training:
-            action = Bernoulli(prob).sample().item()
-        to_add_edge = bool(action == 0)
+            action = Categorical(probs).sample().item()
+        to_add_edge = bool(action < self.num_edge_types)
+        print(f"Action: {action} and ToAddEdge: {to_add_edge}")
 
         if self.training:
-            sample_log_prob = bernoulli_action_log_prob(logit, action)
+            sample_log_prob = F.log_softmax(logits, dim=1)[:, action: action + 1]
             self.log_prob.append(sample_log_prob)
 
         return to_add_edge
@@ -291,9 +292,14 @@ class ChooseDestAndUpdate(nn.Module):
         if not self.training:
             dest = Categorical(dests_probs).sample().item()
 
+
+        print(g)
+        print(f"SRC: {src}")
+        print(f"DEST: {dest}")
+
         if not g.has_edges_between(src, dest):
             # For undirected graphs, we add edges for both directions
-            # so that we can perform graph propagation.
+            # so that we can perform graph propagation.\
             src_list = [src, dest]
             dest_list = [dest, src]
 
@@ -317,7 +323,7 @@ class DGMG(nn.Module):
         self.v_max = v_max
 
         # Graph conditioning vector
-        self.conditioning_vector = ConditionVec().conditioning_vector
+        self.conditioning_vector = ConditionVec("./input.json").conditioning_vector
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -350,6 +356,7 @@ class DGMG(nn.Module):
     def action_step(self):
         old_step_count = self.step_count
         self.step_count += 1
+        print(f"ACTION STEP #: {old_step_count}")
 
         return old_step_count
 

@@ -89,6 +89,8 @@ def setup(args):
                 opts["ds_size"],
                 opts["path_to_dataset"],
             )
+        elif opts["dataset"] == "houses":
+            print("WE GOT HOUSES GIRL")
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 

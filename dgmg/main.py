@@ -203,7 +203,7 @@ if __name__ == "__main__":
     )
 
     # train first, or just eval
-    parser.add_argument("--train", type=bool, default=False, help="set True to train first")
+    parser.add_argument("-t", "--train", action='store_true', help="set True to train first")
 
     # log
     parser.add_argument(
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=10,
+        default=10, #ALEX 10
         help="batch size to use for training",
     )
     parser.add_argument(
