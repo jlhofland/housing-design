@@ -7,6 +7,68 @@ import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
 
+class ConditionVec(nn.Module):
+    def __init__(self, file_name):
+        import json
+        import os
+        import torch
+        import torch.nn as nn
+
+        def parse_input_json(file_path):
+            # Read in input data from JSONC file, "./input.jsonc"
+            with open(file_path, 'r') as openfile:
+                # Reading from json file into python dict
+                layout = json.load(openfile)
+
+            # Manually parse numerical/boolean data into tensor
+            room_number_data = torch.zeros(6)
+            room_number_data[0] = layout["number_of_living_rooms"]
+            room_number_data[1] = int(layout["living_rooms_plus?"])
+            room_number_data[2] = layout["number_of_bedrooms"]
+            room_number_data[3] = int(layout["bedrooms_plus?"])
+            room_number_data[4] = layout["number_of_bathrooms"]
+            room_number_data[5] = int(layout["bathrooms_plus?"])
+
+            # Parse walls / connections into tensors
+            exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
+            connections_sequence = torch.tensor(layout["connections"], dtype=torch.float32)
+
+            return room_number_data, exterior_walls_sequence, connections_sequence
+
+        room_number_data, exterior_walls_sequence, connections_sequence = parse_input_json(os.getcwd() + "/" + file_name)
+
+        # Encode the wall and connection sequences with LSTMs
+        # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
+        lstm_hidden_units = 64  # Adjust as needed
+
+        class LSTMEncoder(nn.Module):
+            def __init__(self, input_dim, hidden_dim):
+                super(LSTMEncoder, self).__init__()
+                self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+
+            def forward(self, x):
+                out, _ = self.lstm(x)
+                return out[-1, :]  # Take the last output of the sequence
+
+        # Encode the sequences
+        exterior_walls_encoder = LSTMEncoder(input_dim=4, hidden_dim=lstm_hidden_units)
+        connections_encoder = LSTMEncoder(input_dim=4, hidden_dim=lstm_hidden_units)
+
+        exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
+        connections_encoded = connections_encoder(connections_sequence)
+
+        # Concatenate the vectors
+        self.conditioning_vector = torch.cat((room_number_data, exterior_walls_encoded, connections_encoded), dim=0)[None, :]
+
+        # print(self.conditioning_vector.shape)
+
+        # # Examine encoder structure, weights
+        # for params in exterior_walls_encoder.state_dict().keys():
+        #     print(params)
+        #     print(exterior_walls_encoder.state_dict()[params].shape)
+
+
+
 class GraphEmbed(nn.Module):
     def __init__(self, node_hidden_size):
         super(GraphEmbed, self).__init__()
@@ -98,21 +160,24 @@ def bernoulli_action_log_prob(logit, action):
 
 
 class AddNode(nn.Module):
-    def __init__(self, graph_embed_func, node_hidden_size):
+    def __init__(self, graph_embed_func, node_hidden_size, conditioning_vector):
         super(AddNode, self).__init__()
 
+        #ALEX: Add parametric number of nodes
+        n_node_types = 5
         self.graph_op = {"embed": graph_embed_func}
+        self.conditioning_vector = conditioning_vector
 
-        self.stop = 1
-        self.add_node = nn.Linear(graph_embed_func.graph_hidden_size, 1)
+        self.stop = n_node_types
+        self.add_node = nn.Linear(graph_embed_func.graph_hidden_size, n_node_types + 1)
 
         # If to add a node, initialize its hv
         #ALEX number of embeddings should be number of node types.
-        self.node_type_embed = nn.Embedding(1, node_hidden_size)
+        self.node_type_embed = nn.Embedding(n_node_types, node_hidden_size)
         #ALEX Here is where we add *space* for node features
         #ALEX OR maybe we do not, and instead the features are added as a separate 
         self.initialize_hv = nn.Linear(
-            node_hidden_size + graph_embed_func.graph_hidden_size,
+            node_hidden_size + graph_embed_func.graph_hidden_size + conditioning_vector.shape[-1],
             node_hidden_size,
         )
 
@@ -129,6 +194,7 @@ class AddNode(nn.Module):
                 [
                     self.node_type_embed(torch.LongTensor([node_type])),
                     graph_embed,
+                    self.conditioning_vector,
                 ],
                 dim=1,
             )
@@ -145,19 +211,19 @@ class AddNode(nn.Module):
     def forward(self, g, action=None):
         graph_embed = self.graph_op["embed"](g)
 
-        logit = self.add_node(graph_embed)
-        prob = torch.sigmoid(logit)
+        logits = self.add_node(graph_embed)
+        probs = F.softmax(logits)
 
         if not self.training:
-            action = Bernoulli(prob).sample().item()
+            action = Categorical(probs).sample().item()
         stop = bool(action == self.stop)
 
         if not stop:
-            g.add_nodes(1)
+            g.add_nodes(action)
             self._initialize_node_repr(g, action, graph_embed)
 
         if self.training:
-            sample_log_prob = bernoulli_action_log_prob(logit, action)
+            sample_log_prob = F.log_softmax(logits, dim=1)[:, action: action + 1]
             self.log_prob.append(sample_log_prob)
 
         return stop
@@ -250,6 +316,9 @@ class DGMG(nn.Module):
         # Graph configuration
         self.v_max = v_max
 
+        # Graph conditioning vector
+        self.conditioning_vector = ConditionVec().conditioning_vector
+
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
 
@@ -257,7 +326,7 @@ class DGMG(nn.Module):
         self.graph_prop = GraphProp(num_prop_rounds, node_hidden_size)
 
         # Actions
-        self.add_node_agent = AddNode(self.graph_embed, node_hidden_size)
+        self.add_node_agent = AddNode(self.graph_embed, node_hidden_size, self.conditioning_vector)
         self.add_edge_agent = AddEdge(self.graph_embed, node_hidden_size)
         self.choose_dest_agent = ChooseDestAndUpdate(
             self.graph_prop, node_hidden_size
@@ -319,14 +388,14 @@ class DGMG(nn.Module):
         # Again, "actions" = "decision sequence"
         self.prepare_for_train()
 
-        stop = self.add_node_and_update(a=actions[self.action_step])
+        stop = self.add_node_and_update(a=actions[self.action_step][1])
 
         while not stop:
-            to_add_edge = self.add_edge_or_not(a=actions[self.action_step])
+            to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1])
             while to_add_edge:
-                self.choose_dest_and_update(a=actions[self.action_step])
-                to_add_edge = self.add_edge_or_not(a=actions[self.action_step])
-            stop = self.add_node_and_update(a=actions[self.action_step])
+                self.choose_dest_and_update(a=actions[self.action_step][1])
+                to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1])
+            stop = self.add_node_and_update(a=actions[self.action_step][1])
 
         return self.get_log_prob()
 

@@ -6,6 +6,8 @@ and will be loaded when setting up."""
 def dataset_based_configure(opts):
     if opts["dataset"] == "cycles":
         ds_configure = cycles_configure
+    elif opts["dataset"] == "houses":
+        ds_configure = houses_configure
     else:
         raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 
@@ -28,6 +30,15 @@ cycles_configure = {
     **{
         "min_size": 10,
         "max_size": 20,
+        "lr": 5e-4,
+    },
+}
+
+houses_configure = {
+    **synthetic_dataset_configure,
+    **{
+        "min_size": 3,
+        "max_size": 30,
         "lr": 5e-4,
     },
 }

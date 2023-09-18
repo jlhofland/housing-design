@@ -34,6 +34,17 @@ def main(opts):
                 num_epochs=opts["nepochs"],
                 num_batches=opts["ds_size"] // opts["batch_size"],
             )
+        elif opts["dataset"] == "houses":
+            from houses import HouseDataset, HouseModelEvaluation, HousePrinting
+
+            dataset = HouseDataset(fname=opts["path_to_dataset"])
+            evaluator = HouseModelEvaluation(
+                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
+            )
+            printer = HousePrinting(
+                num_epochs=opts["nepochs"],
+                num_batches=opts["ds_size"] // opts["batch_size"],
+            )
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 
@@ -61,41 +72,42 @@ def main(opts):
         t2 = time.time()
 
         # Training
-        model.train()
-        for epoch in range(opts["nepochs"]):
-            batch_count = 0
-            batch_loss = 0
-            batch_prob = 0
-            optimizer.zero_grad()
+        if opts["train"]:
+            model.train()
+            for epoch in range(opts["nepochs"]):
+                batch_count = 0
+                batch_loss = 0
+                batch_prob = 0
+                optimizer.zero_grad()
 
-            for i, data in enumerate(data_loader):
-                # here, the "actions" refer to the cycle decision sequences
-                log_prob = model(actions=data)
-                prob = log_prob.detach().exp()
+                for i, data in enumerate(data_loader):
+                    # here, the "actions" refer to the cycle decision sequences
+                    log_prob = model(actions=data)
+                    prob = log_prob.detach().exp()
 
-                loss = -log_prob / opts["batch_size"]
-                prob_averaged = prob / opts["batch_size"]
+                    loss = -log_prob / opts["batch_size"]
+                    prob_averaged = prob / opts["batch_size"]
 
-                loss.backward()
+                    loss.backward()
 
-                batch_loss += loss.item()
-                batch_prob += prob_averaged.item()
-                batch_count += 1
+                    batch_loss += loss.item()
+                    batch_prob += prob_averaged.item()
+                    batch_count += 1
 
-                if batch_count % opts["batch_size"] == 0:
-                    printer.update(
-                        epoch + 1,
-                        {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
-                    )
+                    if batch_count % opts["batch_size"] == 0:
+                        printer.update(
+                            epoch + 1,
+                            {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
+                        )
 
-                    if opts["clip_grad"]:
-                        clip_grad_norm_(model.parameters(), opts["clip_bound"])
+                        if opts["clip_grad"]:
+                            clip_grad_norm_(model.parameters(), opts["clip_bound"])
 
-                    optimizer.step()
+                        optimizer.step()
 
-                    batch_loss = 0
-                    batch_prob = 0
-                    optimizer.zero_grad()
+                        batch_loss = 0
+                        batch_prob = 0
+                        optimizer.zero_grad()
 
         t3 = time.time()
 
@@ -106,11 +118,14 @@ def main(opts):
         t4 = time.time()
 
         print("It took {} to setup.".format(datetime.timedelta(seconds=t2 - t1)))
-        print(
-            "It took {} to finish training.".format(
-                datetime.timedelta(seconds=t3 - t2)
+        if opts["train"]:
+            print(
+                "It took {} to finish training.".format(
+                    datetime.timedelta(seconds=t3 - t2)
+                )
             )
-        )
+        else: 
+            print("Training skipped")
         print(
             "It took {} to finish evaluation.".format(
                 datetime.timedelta(seconds=t4 - t3)
@@ -144,6 +159,16 @@ def main(opts):
                 num_epochs=opts["nepochs"],
                 num_batches=opts["ds_size"] // opts["batch_size"],
             )
+        elif opts["dataset"] == "houses":
+            from houses import HouseModelEvaluation, HousePrinting
+
+            evaluator = HouseModelEvaluation(
+                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
+            )
+            printer = HousePrinting(
+                num_epochs=opts["nepochs"],
+                num_batches=opts["ds_size"] // opts["batch_size"],
+            )
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
         model = torch.load("./model.pth")
@@ -167,15 +192,18 @@ if __name__ == "__main__":
 
     # dataset
     parser.add_argument(
-        "--dataset", choices=["cycles"], default="cycles", help="dataset to use"
+        "--dataset", choices=["cycles", "houses"], default="houses", help="dataset to use"
     )
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="cycles.p",
+        default="houses.p",
         help="load the dataset if it exists, "
         "generate it and save to the path otherwise",
     )
+
+    # train first, or just eval
+    parser.add_argument("--train", type=bool, default=False, help="set True to train first")
 
     # log
     parser.add_argument(

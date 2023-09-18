@@ -43,27 +43,42 @@ g = dgl.heterograph(graph_data)
 
 g.nodes['exterior_wall'].data['e'] = torch.tensor([1,99,12,123])
 
-print(g)
+print(g.ndata)
 
 print(g.nodes('bedroom'))
 
 # print the 'e' feature value for exterior_wall node 1
 print(g.nodes['exterior_wall'].data['e'][1])
 
-# # Plot graph
 
-# import matplotlib.pyplot as plt
-# import networkx as nx
+# Get node-type order
+node_type_order = g.ntypes
 
-# options = {
-#     'node_color': 'black',
-#     'node_size': 20,
-#     'width': 1,
-# }
-# G = dgl.to_networkx(g)
-# plt.figure(figsize=[15,7])
-# nx.draw(G, **options)
-# plt.show()
+# Create node-type subgraph
+g_homo = dgl.to_homogeneous(g)
+print(g_homo.ndata)
+
+labels = {}
+for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
+    labels[idx] = node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
+print(labels)
+
+# Plot graph
+
+import matplotlib.pyplot as plt
+import networkx as nx
+
+options = {
+    'node_color': ['black']+4*['blue'],
+    'node_size': 300,
+    'width': 1,
+    'labels': labels,
+    'font_size': 20
+}
+G = dgl.to_networkx(g_homo)
+plt.figure(figsize=[15,7])
+nx.draw(G, with_labels = True, font_color='r', **options)
+plt.show()
 
 
 
@@ -73,56 +88,56 @@ print(g.nodes['exterior_wall'].data['e'][1])
 # print(torch.cat((x, x, x), 2))
 
 
-## JSON Input
+# ## JSON Input
 
-import json
+# import json
  
-# Data to be written
-user_layout_input = {
-    "exterior_walls": [
-        # Input exterior walls as a list of pairs of coordinates [ [ xi_0, yi_0, xf_0, yf_0 ], [ xi_1, yi_1, xf_1, yf_1 ] , … ]. 
-        # Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
-        [0,0,0,1],
-        [0,1,1,1],
-        [1,1,1,0],
-        [1,0,0,0]
-    ],
-    "number_of_living_rooms": 1,
-    "living_rooms_plus?" : False,
-    "number_of_bedrooms": 1,
-    "bedrooms_plus?" : False,
-    "number_of_bathrooms": 1,
-    "bathrooms_plus?" : False,
-    "connections": [
-        # [room_type, room_index, room_type, room_index, add_door?]
-        # Room types: 0 == exterior_wall, 1 == door, 2 == living_room, 3 == bedroom, 4 == bathroom 
-        [0, 3, 1, 0],
-        [2, 0, 1, 0],
-        [2, 0, 1, 1],
-        [2, 0, 1, 2],
-        [3, 0, 1, 1],
-        [4, 0, 1, 2],
-        [3, 0, 0, 0],
-        [4, 0, 0, 2]
-    ]
-}
+# # Data to be written
+# user_layout_input = {
+#     "exterior_walls": [
+#         # Input exterior walls as a list of pairs of coordinates [ [ xi_0, yi_0, xf_0, yf_0 ], [ xi_1, yi_1, xf_1, yf_1 ] , … ]. 
+#         # Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
+#         [0,0,0,1],
+#         [0,1,1,1],
+#         [1,1,1,0],
+#         [1,0,0,0]
+#     ],
+#     "number_of_living_rooms": 1,
+#     "living_rooms_plus?" : False,
+#     "number_of_bedrooms": 1,
+#     "bedrooms_plus?" : False,
+#     "number_of_bathrooms": 1,
+#     "bathrooms_plus?" : False,
+#     "connections": [
+#         # [room_type, room_index, room_type, room_index, add_door?]
+#         # Room types: 0 == exterior_wall, 1 == door, 2 == living_room, 3 == bedroom, 4 == bathroom 
+#         [0, 3, 1, 0],
+#         [2, 0, 1, 0],
+#         [2, 0, 1, 1],
+#         [2, 0, 1, 2],
+#         [3, 0, 1, 1],
+#         [4, 0, 1, 2],
+#         [3, 0, 0, 0],
+#         [4, 0, 0, 2]
+#     ]
+# }
  
-# # Serializing json
-# json_object = json.dumps(user_layout_input, indent=4)
+# # # Serializing json
+# # json_object = json.dumps(user_layout_input, indent=4)
  
-# # Writing to sample.json
-# with open("sample.jsonc", "w") as outfile:
-#     outfile.write(json_object)
+# # # Writing to sample.json
+# # with open("sample.jsonc", "w") as outfile:
+# #     outfile.write(json_object)
 
 
-# Reading from sample.json
-# Opening JSON file
-with open('sample.jsonc', 'r') as openfile:
+# # Reading from sample.json
+# # Opening JSON file
+# with open('sample.jsonc', 'r') as openfile:
  
-    # Reading from json file into python dict
-    layout = json.load(openfile)
-    a = json.load()
+#     # Reading from json file into python dict
+#     layout = json.load(openfile)
+#     a = json.load()
  
-print(layout)
-print(type(layout))
-print(layout['connections'])
+# print(layout)
+# print(type(layout))
+# print(layout['connections'])

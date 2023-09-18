@@ -16,7 +16,13 @@
     ],
     "connections": [
         // [room_type, room_index, room_type, room_index]
-        // Room types: 0 == exterior_wall, 1 == door, 2 == living_room, 3 == bedroom, 4 == bathroom 
+        // Room types: 0 == exterior_wall, 1 == door, 2 == living_room, 3 == bedroom, 4 == bathroom  
+        // Walls
+        [0, 0, 0, 1], 
+        [0, 1, 0, 2], 
+        [0, 2, 0, 3], 
+        [0, 3, 0, 0],
+        // The rest
         [0, 3, 1, 0],
         [2, 0, 1, 0],
         [2, 0, 1, 1],

@@ -1,6 +1,7 @@
 import os
 import pickle
 import random
+import dgl
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -128,6 +129,25 @@ class HouseModelEvaluation(object):
 
         self.dir = dir
 
+    def assign_node_labels_and_colors(self, g):
+        color_dict = {0:'black', 1:'blue', 2:'yellow', 3:'green', 4:'teal'}
+        colors = []
+        labels = {}
+
+        # Get node-type order
+        node_type_order = g.ntypes
+
+        # Create node-type subgraph
+        g_homo = dgl.to_homogeneous(g)
+        # print(g_homo.ndata)
+
+        for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
+            labels[idx] = node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
+            colors.append(color_dict[node_type_order[node]])
+        
+        return labels, colors
+            
+
     def rollout_and_examine(self, model, num_samples):
         assert not model.training, "You need to call model.eval()."
 
@@ -136,7 +156,16 @@ class HouseModelEvaluation(object):
         num_house = 0
         num_valid = 0
         plot_times = 0
-        adj_lists_to_plot = []
+        # adj_lists_to_plot = []
+        graphs_to_plot = []
+
+        options = {
+            'node_size': 20,
+            'width': 1,
+            'with_labels': True,
+            'font_size': 20,
+            'font_color': 'r',
+        }
 
         for i in range(num_samples):
             sampled_graph = model()
@@ -148,8 +177,9 @@ class HouseModelEvaluation(object):
                 # during the inference so feel free to modify the code.
                 sampled_graph = sampled_graph[0]
 
-            sampled_adj_list = dglGraph_to_adj_list(sampled_graph)
-            adj_lists_to_plot.append(sampled_adj_list)
+            # sampled_adj_list = dglGraph_to_adj_list(sampled_graph)
+            # adj_lists_to_plot.append(sampled_adj_list)
+            graphs_to_plot.append(sampled_graph)
 
             graph_size = sampled_graph.num_nodes()
             valid_size = self.v_min <= graph_size <= self.v_max
@@ -166,21 +196,27 @@ class HouseModelEvaluation(object):
             if valid_size and house:
                 num_valid += 1
 
-            if len(adj_lists_to_plot) >= 4:
+            if len(graphs_to_plot) >= 4:
                 plot_times += 1
                 fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2, 2)
                 axes = {0: ax0, 1: ax1, 2: ax2, 3: ax3}
                 for i in range(4):
-                    nx.draw_circular(
-                        nx.from_dict_of_lists(adj_lists_to_plot[i]),
-                        with_labels=True,
-                        ax=axes[i],
-                    )
+                    g = graphs_to_plot[i]
+                    labels, colors = self.assign_node_labels_and_colors(g)
+                    G = dgl.to_networkx(dgl.to_homogeneous(g))
+                    plt.figure(figsize=[15,7])
+                    nx.draw(G, ax=axes[i], node_color=colors, labels=labels, **options)
+                    # nx.draw_circular(
+                    #     nx.from_dict_of_lists(adj_lists_to_plot[i]),
+                    #     with_labels=True,
+                    #     ax=axes[i],
+                    # )
 
                 plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
                 plt.close()
 
-                adj_lists_to_plot = []
+                # adj_lists_to_plot = []
+                graphs_to_plot = []
 
         self.num_samples_examined = num_samples
         self.average_size = num_total_size / num_samples
