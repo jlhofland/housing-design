@@ -1,71 +1,55 @@
 from functools import partial
+from utils import parse_input_json, define_empty_typed_graph, apply_partial_graph_input_completion
 
+import os
 import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
+import numpy as np
 
 class LSTMEncoder(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(LSTMEncoder, self).__init__()
         self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+        self.h0 = torch.rand(1,hidden_dim)
+        self.c0 = torch.rand(1,hidden_dim)
 
     def forward(self, x):
-        out, _ = self.lstm(x)
+        out, _ = self.lstm(x, (self.h0, self.c0))
         return out[-1, :]  # Take the last output of the sequence
     
+
 class ConditionVec(nn.Module):
     def __init__(self, file_name):
-        import json
         import os
         import torch
         import torch.nn as nn
 
-        def parse_input_json(file_path):
-            # Read in input data from JSONC file, "./input.jsonc"
-            with open(file_path, 'r') as openfile:
-                # Reading from json file into python dict
-                layout = json.load(openfile)
-
-            # Manually parse numerical/boolean data into tensor
-            room_number_data = torch.zeros(6)
-            room_number_data[0] = layout["number_of_living_rooms"]
-            room_number_data[1] = int(layout["living_rooms_plus?"])
-            room_number_data[2] = layout["number_of_bedrooms"]
-            room_number_data[3] = int(layout["bedrooms_plus?"])
-            room_number_data[4] = layout["number_of_bathrooms"]
-            room_number_data[5] = int(layout["bathrooms_plus?"])
-
-            # Parse walls / connections into tensors
-            exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
-            connections_sequence = torch.tensor(layout["connections"], dtype=torch.float32)
-
-            return room_number_data, exterior_walls_sequence, connections_sequence
-
-        room_number_data, exterior_walls_sequence, connections_sequence = parse_input_json(os.getcwd() + "/" + file_name)
+        room_number_data, exterior_walls_sequence, connections_corners, connections_rooms, corner_type_edge_features = parse_input_json(os.getcwd() + "/" + file_name)
 
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
         lstm_hidden_units = 64  # Adjust as needed
-
         # Encode the sequences
         exterior_walls_encoder = LSTMEncoder(input_dim=4, hidden_dim=lstm_hidden_units)
-        connections_encoder = LSTMEncoder(input_dim=4, hidden_dim=lstm_hidden_units)
+        connections_corners_encoder = LSTMEncoder(input_dim=5, hidden_dim=lstm_hidden_units)
+        connections_rooms_encoder = LSTMEncoder(input_dim=6, hidden_dim=lstm_hidden_units)
 
         exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
-        connections_encoded = connections_encoder(connections_sequence)
+        connections_corners_encoded = connections_corners_encoder(torch.cat([connections_corners.type(torch.float32), corner_type_edge_features], dim=1))
+        connections_rooms_encoded = connections_rooms_encoder(connections_rooms.type(torch.float32))
 
         # Concatenate the vectors
-        self.conditioning_vector = torch.cat((room_number_data, exterior_walls_encoded, connections_encoded), dim=0)[None, :]
-
+        self.conditioning_vector = torch.cat((room_number_data, exterior_walls_encoded, connections_corners_encoded, connections_rooms_encoded), dim=0)[None, :]
+        
         # print(self.conditioning_vector.shape)
 
         # # Examine encoder structure, weights
         # for params in exterior_walls_encoder.state_dict().keys():
         #     print(params)
         #     print(exterior_walls_encoder.state_dict()[params].shape)
-
 
 
 class GraphEmbed(nn.Module):
@@ -159,7 +143,7 @@ def bernoulli_action_log_prob(logit, action):
 
 
 class AddNode(nn.Module):
-    def __init__(self, graph_embed_func, node_hidden_size, conditioning_vector):
+    def __init__(self, graph_embed_func, node_hidden_size, node_features_size, conditioning_vector):
         super(AddNode, self).__init__()
 
         #ALEX: Add parametric number of nodes
@@ -176,29 +160,32 @@ class AddNode(nn.Module):
         #ALEX Here is where we add *space* for node features
         #ALEX OR maybe we do not, and instead the features are added as a separate 
         self.initialize_hv = nn.Linear(
-            node_hidden_size + graph_embed_func.graph_hidden_size + self.conditioning_vector.shape[-1],
+            node_hidden_size + graph_embed_func.graph_hidden_size + node_features_size + self.conditioning_vector.shape[-1],
             node_hidden_size,
         )
 
         self.init_node_activation = torch.zeros(1, 2 * node_hidden_size)
 
-    def _initialize_node_repr(self, g, node_type, graph_embed):
+    def _initialize_node_repr(self, g, action, graph_embed):
         num_nodes = g.num_nodes()
         #ALEX This function passes through a linear layer a node_embed_CAT_graph_embed to calculate an initial hv
         #ALEX Here is where we would add node features
         #ALEX This is where we would add our conditioning vector, c
-        print(f"NodeType: {node_type}")
+        print(f"Action: {action}")
+        node_features = action[1]
         hv_init = self.initialize_hv(
             torch.cat(
                 [
-                    self.node_type_embed(torch.LongTensor([node_type])),
+                    self.node_type_embed(torch.LongTensor([action[0]])),
                     graph_embed,
+                    # node_features, #ALEX-TODO: Uncomment as needed
                     self.conditioning_vector,
                 ],
                 dim=1,
             )
         )
         g.nodes[num_nodes - 1].data["hv"] = hv_init
+        # g.nodes[num_nodes - 1].data["hf"] = node_features #ALEX-TODO: Uncomment as needed
         g.nodes[num_nodes - 1].data["a"] = self.init_node_activation
         # #ALEX
         # print(g)
@@ -214,8 +201,10 @@ class AddNode(nn.Module):
         probs = F.softmax(logits, dim=1)
 
         if not self.training:
-            action = Categorical(probs).sample().item()
-        stop = bool(action == self.stop)
+            #ALEX-TODO: Need to somehow sample features.
+            action = [-99, []]
+            action[0] = Categorical(probs).sample().item()
+        stop = bool(action[0] == self.stop)
 
         if not stop:
             g.add_nodes(action)
@@ -249,19 +238,20 @@ class AddEdge(nn.Module):
         probs = F.softmax(logits, dim=1)
 
         if not self.training:
-            action = Categorical(probs).sample().item()
-        to_add_edge = bool(action < self.num_edge_types)
+            action = [-99, []]
+            action[0] = Categorical(probs).sample().item()
+        to_add_edge = bool(action[0] < self.num_edge_types)
         print(f"Action: {action} and ToAddEdge: {to_add_edge}")
 
         if self.training:
-            sample_log_prob = F.log_softmax(logits, dim=1)[:, action: action + 1]
+            sample_log_prob = F.log_softmax(logits, dim=1)[:, action[0]: action[0] + 1]
             self.log_prob.append(sample_log_prob)
 
         return to_add_edge
 
 
 class ChooseDestAndUpdate(nn.Module):
-    def __init__(self, graph_prop_func, node_hidden_size):
+    def __init__(self, graph_prop_func, node_hidden_size, edge_features_size):
         super(ChooseDestAndUpdate, self).__init__()
 
         self.graph_op = {"prop": graph_prop_func}
@@ -316,14 +306,16 @@ class ChooseDestAndUpdate(nn.Module):
 
 
 class DGMG(nn.Module):
-    def __init__(self, v_max, node_hidden_size, num_prop_rounds):
+    def __init__(self, v_max, node_hidden_size, node_features_size, edge_features_size, num_prop_rounds, room_types, edge_types):
         super(DGMG, self).__init__()
 
         # Graph configuration
         self.v_max = v_max
+        self.room_types = room_types
+        self.edge_types = edge_types
 
         # Graph conditioning vector
-        self.conditioning_vector = ConditionVec("./input.json").conditioning_vector
+        self.conditioning_vector = ConditionVec("input.json").conditioning_vector
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -332,11 +324,9 @@ class DGMG(nn.Module):
         self.graph_prop = GraphProp(num_prop_rounds, node_hidden_size)
 
         # Actions
-        self.add_node_agent = AddNode(self.graph_embed, node_hidden_size, self.conditioning_vector)
+        self.add_node_agent = AddNode(self.graph_embed, node_hidden_size, node_features_size, self.conditioning_vector)
         self.add_edge_agent = AddEdge(self.graph_embed, node_hidden_size)
-        self.choose_dest_agent = ChooseDestAndUpdate(
-            self.graph_prop, node_hidden_size
-        )
+        self.choose_dest_agent = ChooseDestAndUpdate(self.graph_prop, node_hidden_size, edge_features_size)
 
         # Weight initialization
         self.init_weights()
@@ -393,16 +383,17 @@ class DGMG(nn.Module):
 
     def forward_train(self, actions):
         # Again, "actions" = "decision sequence"
-        self.prepare_for_train()
+        # In order to have node/edge types and node/edge features, 
+        # we will use a decision sequence that is formatted as so:
 
-        stop = self.add_node_and_update(a=actions[self.action_step][1])
+        stop = self.add_node_and_update(a=actions[self.action_step][1:])
 
         while not stop:
-            to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1])
+            to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1:])
             while to_add_edge:
-                self.choose_dest_and_update(a=actions[self.action_step][1])
-                to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1])
-            stop = self.add_node_and_update(a=actions[self.action_step][1])
+                self.choose_dest_and_update(a=actions[self.action_step][1:])
+                to_add_edge = self.add_edge_or_not(a=actions[self.action_step][1:])
+            stop = self.add_node_and_update(a=actions[self.action_step][1:])
 
         return self.get_log_prob()
 
@@ -421,14 +412,11 @@ class DGMG(nn.Module):
 
     def forward(self, actions=None):
         # The graph we will work on
-        self.g = dgl.DGLGraph()
-
-        # If there are some features for nodes and edges,
-        # zero tensors will be set for those of new nodes and edges.
-        self.g.set_n_initializer(dgl.frame.zero_initializer)
-        self.g.set_e_initializer(dgl.frame.zero_initializer)
+        self.g = apply_partial_graph_input_completion(file_path=os.getcwd()+"/input.json", room_types=self.room_types, edge_types=self.edge_types)
 
         if self.training:
+            self.prepare_for_train()
             return self.forward_train(actions)
         else:
             return self.forward_inference()
+

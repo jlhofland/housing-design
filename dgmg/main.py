@@ -61,6 +61,12 @@ def main(opts):
             v_max=opts["max_size"],
             node_hidden_size=opts["node_hidden_size"],
             num_prop_rounds=opts["num_propagation_rounds"],
+            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
+            # zero for now, no node features
+            node_features_size=0,
+            edge_features_size=2,
+            room_types=opts["room_types"],
+            edge_types=opts["edge_types"]
         )
 
         # Initialize optimizer

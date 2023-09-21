@@ -40,5 +40,7 @@ houses_configure = {
         "min_size": 3,
         "max_size": 30,
         "lr": 5e-4,
+        "room_types": ["exterior_wall", "living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"] ,
+        "edge_types": ["corner_edge", "room_adjacency_edge"],
     },
 }
