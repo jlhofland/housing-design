@@ -1,31 +1,8 @@
-running python3 main.py
+Seems to be training but...
 
-getting error:
+I do not think the features are being predicted and errors contributing to the loss, so...
 
-Traceback (most recent call last):
-  File "main.py", line 245, in <module>
-    main(opts)
-  File "main.py", line 60, in main
-    model = DGMG(
-  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 337, in __init__
-    self.conditioning_vector = ConditionVec("input.json").conditioning_vector
-  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 61, in __init__
-    exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
-  File "/home/evalexii/.local/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 17, in forward
-    out, _ = self.lstm(x)
-  File "/home/evalexii/.local/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/evalexii/.local/lib/python3.8/site-packages/torch/nn/modules/rnn.py", line 812, in forward
-    result = _VF.lstm(input, hx, self._flat_weights, self.bias, self.num_layers,
-RuntimeError: mat1 and mat2 must have the same dtype
+Need to fix that somehow
 
-thinking:
 
-might be something to do with the corners sequence, but idk because that is a separate encoder...
-this was working before, so, just need to figure out what the deal is
-
-recent work:
-
-partially built graph initiated
+ fix it. with peace in your day and your heart.

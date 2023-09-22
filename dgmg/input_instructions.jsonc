@@ -7,8 +7,9 @@
     "number_of_bathrooms": 1,
     "bathrooms_plus?" : false,
     "exterior_walls": [
-        // Input exterior walls as a list of pairs of coordinates [ [ xi_0, yi_0, xf_0, yf_0 ], [ xi_1, yi_1, xf_1, yf_1 ] , … ]. 
-        // Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
+        // Input exterior walls as a list of pairs of coordinates + exterior door (yes/no) [ [ xi_0, yi_0, xf_0, yf_0, D0 ], [ xi_1, yi_1, xf_1, yf_1, D1 ] , … ]. 
+        // OR Input exterior walls as a list of wall lengths and exterior door (yes/no) [ [L0, D0], [L1, D1], ... ]
+        // ALEX-TODO: check for exterior wall validity. Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
         [0,0,0,1],
         [0,1,0,2],
         [0,2,1,2],
@@ -30,18 +31,19 @@
         // Connection types: {0: "exterior wall corners", 1:"room adjacencies"
         // Connection features: 
         //      0.0 {interior wall angle}
+        //      0.1 {garbage, zeros - this is to make all edges have two features}
         //      1.0 {0: "wall with door", 1: "wall without door", 2: "no wall, no door"}
         //      1.1 (direction from src to dest is ...): [0, 1,  2, 3,  4, 5,  6, 7,  8] == 
         //                                               [E, NE, N, NW, W, SW, S, SE, undefined] 
  
         // Walls/Corners
-        [0, 0, 0, 1, 0], 
-        [0, 1, 0, 2, -90], 
-        [0, 2, 0, 3, 0], 
-        [0, 3, 0, 4, -90],
-        [0, 4, 0, 5, 0],
-        [0, 5, 0, 6, -90],
-        [0, 6, 0, 0, -90]
+        [0, 0, 0, 1, 0, 0], 
+        [0, 1, 0, 2, -90, 0], 
+        [0, 2, 0, 3, 0, 0], 
+        [0, 3, 0, 4, -90, 0],
+        [0, 4, 0, 5, 0, 0],
+        [0, 5, 0, 6, -90, 0],
+        [0, 6, 0, 0, -90, 0]
     ],
         // Room Adjacencies (CURRENTLY from src to dest, but not repeated the other way around with reversed direction)
     "connections_rooms": [

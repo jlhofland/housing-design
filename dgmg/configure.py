@@ -21,7 +21,7 @@ synthetic_dataset_configure = {
     "num_propagation_rounds": 2,
     "optimizer": "Adam",
     "nepochs": 1, #25
-    "ds_size": 400,#0,
+    "ds_size": 100,#0,
     "num_generated_samples": 100,#00,
 }
 
@@ -40,6 +40,8 @@ houses_configure = {
         "min_size": 3,
         "max_size": 30,
         "lr": 5e-4,
+        "node_features_size": 0,
+        "edge_features_size": 2,
         "room_types": ["exterior_wall", "living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"] ,
         "edge_types": ["corner_edge", "room_adjacency_edge"],
     },

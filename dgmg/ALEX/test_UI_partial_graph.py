@@ -154,7 +154,7 @@ def apply_partial_graph_input_completion_old(file_path):
 
         return g
 
-def apply_partial_graph_input_completion(file_path):
+def apply_partial_graph_input_completion(file_path, node_hidden_size=16):
         with open(file_path, 'r') as fr:
             room_number_data, exterior_walls_sequence, connections_corners_sequence, connections_rooms_sequence, corner_type_edge_features = parse_input_json(file_path=file_path)
 
@@ -193,6 +193,10 @@ def apply_partial_graph_input_completion(file_path):
             etype = (room_types[connection[0].item()], 'room_adjacency_edge', room_types[connection[2].item()])
             g.add_edges(u=connection[1].item(), v=connection[3].item(), etype=etype)
 
+        # Add generic GNN 'hv' features to all nodes
+        for ntype in g.ntypes:
+            g.nodes[ntype].data['hv'] = torch.rand(g.num_nodes(ntype), node_hidden_size)
+        
         # Add in wall-node features
         g.nodes['exterior_wall'].data['hf'] = exterior_walls_features
         
@@ -227,8 +231,28 @@ def apply_partial_graph_input_completion(file_path):
             if g.num_edges(c_et) > 0:
                 print(f"Edge numbers: {c_et} : {g.num_edges(c_et)}")
                 print(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}")
+        for nt in g.ntypes:
+            if g.num_nodes(nt) > 0:
+                print(f"Node features: {nt} :\n {g.nodes[nt].data}")
 
         return g
 
 print("Result:")
-g = apply_partial_graph_input_completion(file_path=os.getcwd()+"/../input.json")
+g = apply_partial_graph_input_completion(file_path=os.getcwd()+"/input.json")
+
+# update some features
+hvs = torch.empty((0,16))
+for key in g.ndata['hv']:
+    print(key)
+    hvs = torch.cat((hvs, g.ndata['hv'][key]), dim=0)
+print(hvs)
+
+for ntype in g.ntypes:
+    if g.num_nodes(ntype) > 0:
+        for node_hv in g.nodes[ntype].data['hv']:
+            print(node_hv)
+            # print(node['hv'])
+
+# for node in g.nodes['exterior_wall']:
+#     print(node)
+#     print(g.nodes['exterior_wall'].data)

@@ -14,6 +14,7 @@ from model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from utils import Printer
 
 
 def main(opts):
@@ -37,7 +38,8 @@ def main(opts):
         elif opts["dataset"] == "houses":
             from houses import HouseDataset, HouseModelEvaluation, HousePrinting
 
-            dataset = HouseDataset(fname=opts["path_to_dataset"])
+            if not opts["gen_data"]:
+                dataset = HouseDataset(fname=opts["path_to_dataset"])
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -48,13 +50,14 @@ def main(opts):
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 
-        data_loader = DataLoader(
-            dataset,
-            batch_size=1,
-            shuffle=True,
-            num_workers=0,
-            collate_fn=dataset.collate_single,
-        )
+        if not opts["gen_data"]:
+            data_loader = DataLoader(
+                dataset,
+                batch_size=1,
+                shuffle=False,
+                num_workers=0,
+                collate_fn=dataset.collate_single,
+            )
 
         # Initialize_model
         model = DGMG(
@@ -63,17 +66,27 @@ def main(opts):
             num_prop_rounds=opts["num_propagation_rounds"],
             # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
             # zero for now, no node features
-            node_features_size=0,
-            edge_features_size=2,
+            node_features_size=opts["node_features_size"],
+            edge_features_size=opts["edge_features_size"],
             room_types=opts["room_types"],
-            edge_types=opts["edge_types"]
+            edge_types=opts["edge_types"],
+            gen_houses_dataset_only=opts["gen_data"]
         )
+        # model = model.cuda()
 
         # Initialize optimizer
         if opts["optimizer"] == "Adam":
             optimizer = Adam(model.parameters(), lr=opts["lr"])
         else:
             raise ValueError("Unsupported argument for the optimizer")
+        
+        try:
+            from tensorboardX import SummaryWriter
+            writer = SummaryWriter(opts['log_dir'])
+        except ImportError:
+            print('If you want to use tensorboard, install tensorboardX with pip.')
+            writer = None
+        train_printer = Printer(opts['nepochs'], len(dataset), opts['batch_size'], writer)
 
         t2 = time.time()
 
@@ -84,27 +97,38 @@ def main(opts):
                 batch_count = 0
                 batch_loss = 0
                 batch_prob = 0
+                batch_number = 0
                 optimizer.zero_grad()
 
+                print("#######################\nBegin Training\n#######################")
+                print(f"Beginning batch {batch_number}")
                 for i, data in enumerate(data_loader):
                     # here, the "actions" refer to the cycle decision sequences
-                    log_prob = model(actions=data)
+                    # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
+                    # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
+
+                    log_prob = model(actions=data) 
                     prob = log_prob.detach().exp()
 
-                    loss = -log_prob / opts["batch_size"]
+                    loss_averaged = -log_prob / opts["batch_size"]
                     prob_averaged = prob / opts["batch_size"]
 
-                    loss.backward()
+                    loss_averaged.backward(retain_graph=True)
 
-                    batch_loss += loss.item()
+                    batch_loss += loss_averaged.item()
                     batch_prob += prob_averaged.item()
                     batch_count += 1
 
+                    train_printer.update(epoch + 1, loss_averaged.item(), prob_averaged.item())
+
+                    # print(f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}")
+
                     if batch_count % opts["batch_size"] == 0:
-                        printer.update(
-                            epoch + 1,
-                            {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
-                        )
+                        batch_number += 1
+                        # printer.update(
+                        #     epoch + 1,
+                        #     {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
+                        # )
 
                         if opts["clip_grad"]:
                             clip_grad_norm_(model.parameters(), opts["clip_bound"])
@@ -114,6 +138,7 @@ def main(opts):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
+
 
         t3 = time.time()
 
@@ -203,13 +228,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="houses.p",
+        default="houses_new_dataset.p",
         help="load the dataset if it exists, "
         "generate it and save to the path otherwise",
     )
 
     # train first, or just eval
     parser.add_argument("-t", "--train", action='store_true', help="set True to train first")
+
+    # set flag to only generate a houses dataset
+    parser.add_argument("-gd", "--gen_data", action='store_true', help="set True to only generate a houses dataset")
 
     # log
     parser.add_argument(

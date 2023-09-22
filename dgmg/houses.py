@@ -2,6 +2,8 @@ import os
 import pickle
 import random
 import dgl
+import time
+import torch
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -23,7 +25,8 @@ from torch.utils.data import Dataset
 
 
 def check_house(g):
-    size = g.num_nodes()
+    return True
+    # size = g.num_nodes()
 
     #ALEX Perhaps check that all nodes of type 'exterior_wall' together form a cycle
     #ALEX Perhaps check if all rooms connect to at least one other room
@@ -44,7 +47,6 @@ def check_house(g):
     #     if get_next(node, size - 1) not in neighbors:
     #         return False
 
-    return True
 
 
 # def get_decision_sequence(size):
@@ -85,6 +87,108 @@ def check_house(g):
 
 #     with open(fname, "wb") as f:
 #         pickle.dump(samples, f)
+
+def generate_home_dataset(g, num_homes):
+    import random
+    import torch
+    import time
+
+    # print(g.ndata['hv'])
+    # for key in g.ndata['hv']:
+
+    #     print(f"Old: {g.ndata['a'][key]}")
+    #     current_a = g.ndata['a'][key]
+    #     current_hv = g.ndata['hv'][key]
+    #     g.nodes[key].data['a'] = 2*current_a
+    #     print(f"New: {g.ndata['a'][key]}")
+    # # a = torch.cat([g.ndata['hv'][key] for key in g.ndata['hv']], dim=0)
+    # # print(a)
+    # # a[0] = torch.tensor([[-2., -2., -2., -2., -1., -1., -1., -1., -1., -1., -1., -1., -1., -1., -1., -1.]])
+    # # b = torch.cat([g.ndata['hv'][key] for key in g.ndata['hv']], dim=0)
+    # # print(a)
+    # # print(b)
+    # time.sleep(30)
+
+        
+    node_types = ["exterior_wall", "living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room", "stop"]
+    homes = []
+    max_num_nodes = 20
+
+
+    while len(homes)<num_homes:
+        # Available node types
+        node_counts = {"exterior_wall":0, "living_room":0, "kitchen":0, "bedroom":0, "bathroom":0, "missing":0, "closet":0, "balcony":0, "corridor":0, "dining_room":0, "laundry_room":0}
+        total_num_nodes = 0
+
+        for ntype in g.ntypes:
+            node_counts[ntype] = g.num_nodes(ntype)
+            total_num_nodes += g.num_nodes(ntype)
+        print("####################################")
+        print(f"House #: {len(homes)}")
+        print(f"Initial num nodes: {total_num_nodes}")
+
+        # Initialize the decision list
+        decisions = []
+
+        # Step 1: Add the initial node or terminate the generation process (i=0)
+        initial_node_type = random.choices(node_types[1:-1], weights=[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], k=1)[0]  # Choose a random initial node type
+        decisions.append((0, initial_node_type, -1))
+        stop = bool(initial_node_type == "stop")
+        if not stop:
+            node_counts[initial_node_type] += 1
+            total_num_nodes += 1
+            print(f"Added initial node of type {initial_node_type}, ID# {node_counts[initial_node_type]}. Num_nodes: {total_num_nodes}")
+
+        else:
+            print("Stopped at initial node")
+
+        src_node_type = initial_node_type
+        src_node_id = node_counts[initial_node_type]
+        # Continue generating the house graph
+        while not stop:
+            # Step 2: Decide whether to add an edge or terminate (i=1)
+            add_edge = random.choice([0, 1])#, weights=[0.3, 0.7], k=1)[0]  # 0 for adding an edge, 1 for termination
+            decisions.append((1, add_edge, -1))
+            
+            if add_edge == 0:
+                # Step 3: Add an edge to a destination node (i=2)
+                non_zero_dests = [key for key in node_counts if node_counts[key]>0]
+                destination_node_type = random.choice(non_zero_dests)  # Choose a random destination node type
+                destination_node_id = random.randint(0, node_counts[destination_node_type] - 1)  # Choose a random destination node id 
+                while (src_node_type, src_node_id) == (destination_node_type, destination_node_id):
+                    destination_node_type = random.choice(non_zero_dests)  # Choose a random destination node type
+                    destination_node_id = random.randint(0, node_counts[destination_node_type] - 1)  # Choose a random destination node id 
+                edge_feature_vector = torch.tensor([[random.randint(0, 2), random.randint(0, 8)]])
+                decisions.append((2, (destination_node_type, destination_node_id), edge_feature_vector))
+                print("Added edge")
+            else:
+                # Terminate the generation process (i=0)
+                if total_num_nodes < max_num_nodes:
+                    new_node_type = random.choice(node_types[1:])#, weights=[0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.5], k=1)[0]  # Choose a random initial node type
+                    stop = bool(new_node_type == "stop")
+                    if not stop:
+                        decisions.append((0, new_node_type, -1))
+                        node_counts[new_node_type] += 1
+                        total_num_nodes += 1
+                        print(f"Added new node of type {new_node_type}, ID# {node_counts[new_node_type]}. Num_nodes: {total_num_nodes}")
+                    else:
+                        decisions.append((0, "stop", -1))
+                        print("Stopped at later node 1")
+                else:
+                    stop = True
+                    decisions.append((0, "stop", -1))
+                    print("Stopped at later node 2")
+        homes.append(decisions)
+    with open("houses_new_dataset.p", "wb+") as f:
+        pickle.dump(homes, f)
+    with open("houses_new_dataset.txt", "w") as f:
+        for home in homes:
+            f.write("###################\nNew home\n")
+            for step in home:
+                f.write(str(step)+"\n")
+
+    # End the decision list
+
 
 
 class HouseDataset(Dataset):
@@ -130,7 +234,21 @@ class HouseModelEvaluation(object):
         self.dir = dir
 
     def assign_node_labels_and_colors(self, g):
-        color_dict = {0:'black', 1:'blue', 2:'yellow', 3:'green', 4:'teal'}
+        # color_dict_new = {"exterior_wall", "living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"}
+        # color_dict_old = {0:'black', 1:'blue', 2:'yellow', 3:'green', 4:'teal'}
+        color_dict = {
+            "exterior_wall": "lightblue",
+            "living_room": "red",
+            "kitchen": "orange",
+            "bedroom": "purple",
+            "bathroom": "pink",
+            "missing": "gray",
+            "closet": "brown",
+            "balcony": "lime",
+            "corridor": "cyan",
+            "dining_room": "gold",
+            "laundry_room": "magenta",
+        }
         colors = []
         labels = {}
 
@@ -160,10 +278,10 @@ class HouseModelEvaluation(object):
         graphs_to_plot = []
 
         options = {
-            'node_size': 20,
+            'node_size': 300,
             'width': 1,
             'with_labels': True,
-            'font_size': 20,
+            'font_size': 12,
             'font_color': 'r',
         }
 
@@ -177,8 +295,6 @@ class HouseModelEvaluation(object):
                 # during the inference so feel free to modify the code.
                 sampled_graph = sampled_graph[0]
 
-            # sampled_adj_list = dglGraph_to_adj_list(sampled_graph)
-            # adj_lists_to_plot.append(sampled_adj_list)
             graphs_to_plot.append(sampled_graph)
 
             graph_size = sampled_graph.num_nodes()
@@ -196,27 +312,43 @@ class HouseModelEvaluation(object):
             if valid_size and house:
                 num_valid += 1
 
-            if len(graphs_to_plot) >= 4:
+            if len(graphs_to_plot) >= 1:
                 plot_times += 1
-                fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2, 2)
-                axes = {0: ax0, 1: ax1, 2: ax2, 3: ax3}
-                for i in range(4):
-                    g = graphs_to_plot[i]
-                    labels, colors = self.assign_node_labels_and_colors(g)
-                    G = dgl.to_networkx(dgl.to_homogeneous(g))
-                    plt.figure(figsize=[15,7])
-                    nx.draw(G, ax=axes[i], node_color=colors, labels=labels, **options)
-                    # nx.draw_circular(
-                    #     nx.from_dict_of_lists(adj_lists_to_plot[i]),
-                    #     with_labels=True,
-                    #     ax=axes[i],
-                    # )
-
+                fig, ax = plt.subplots(1, 1, figsize=(15,7))
+                g = graphs_to_plot[0]
+                # print("PLOTTING GRAPH")
+                # print(f"Graph:\n {g}")
+                labels, colors = self.assign_node_labels_and_colors(g)
+                # print(f"Labels: {labels}")
+                # print(f"Colors: {colors}")
+                G = dgl.to_networkx(dgl.to_homogeneous(g))
+                # print(f"HomoGraph:\n {G}")
+                # plt.figure(figsize=[15,7])
+                nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
                 plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
+                # plt.show()
+                # time.sleep(20)
                 plt.close()
 
                 # adj_lists_to_plot = []
                 graphs_to_plot = []
+            
+            # if len(graphs_to_plot) >= 4:
+            #     plot_times += 1
+            #     fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2, 2)
+            #     axes = {0: ax0, 1: ax1, 2: ax2, 3: ax3}
+            #     for i in range(4):
+            #         g = graphs_to_plot[i]
+            #         labels, colors = self.assign_node_labels_and_colors(g)
+            #         G = dgl.to_networkx(dgl.to_homogeneous(g))
+            #         plt.figure(figsize=[15,7])
+            #         nx.draw(G, ax=axes[i], node_color=colors, labels=labels, **options)
+
+            #     plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
+            #     plt.close()
+
+            #     # adj_lists_to_plot = []
+            #     graphs_to_plot = []
 
         self.num_samples_examined = num_samples
         self.average_size = num_total_size / num_samples

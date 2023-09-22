@@ -1,17 +1,22 @@
+node_types = ["living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"]
+
 """
 
 Home generation decision list
 
 decisions : list
-    decisions[i] is a 3-tuple (i, j, kv)
+    decisions[i] is a 3-tuple (i, j, k)
     - If i = 0, 
-        j specifies either the type of node to add self.node_types[j] or termination with j = len(self.node_types)
-        kv specifies the node feature vector
+        j is a string that represents either the type of node to add (select from node_types variable) or to end the house generation process when j == "stop"
+        k specifies nothing and is set to -1
     - If i = 1, 
-        j specifies either edge_type to add self.edge_types[j] or termination with j = len(self.edge_types)
-        kv specifies the edge feature vector
+        j specifies either to add an edge (j = 0) or not to add an edge (j = 1)
+        k specifies nothing and is set to -1
     - If i = 2, 
-        j specifies the destination node id for the added edge. With the formulation of DGMG, j must be created before the decision.
-        kv specifies nothing and shall be an empty list
+        j specifies a tuple of (destination node type (string), destination node id (int)) for the added edge. Destination node must have been created before the decision via an i=0 tuple. 
+        k specifies the edge feature vector of format: torch.tensor([[a, b]]) where a in range(3) and b in range(9)
 
 """
+
+# For destination node id, the node must first have been created via a prior decision 3-tuple with i=0
+# Please end the list of 3-tuples after a 3-tuple with i=0 has j == "stop"

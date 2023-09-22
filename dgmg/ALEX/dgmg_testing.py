@@ -33,8 +33,8 @@ import torch
 room_type_mapping = {0:"exterior_wall", 1:"living_room", 2:"kitchen", 3:"bedroom", 4:"bathroom", 5:"missing", 6:"closet", 7:"balcony", 8:"corridor", 9:"dining_room", 10:"laundry_room"}  
 
 graph_data = {
-    ('bedroom', 'adjacent_to', 'exterior_wall') : (torch.tensor([0]), torch.tensor([0])),
-    ('bathroom', 'fixes', 'exterior_wall') : (torch.tensor([0]), torch.tensor([0])),
+    ('bedroom', 'room_adjacency', 'exterior_wall') : (torch.tensor([0]), torch.tensor([0])),
+    ('bathroom', 'room_adjacency', 'exterior_wall') : (torch.tensor([0]), torch.tensor([0])),
 }
 
 g = dgl.heterograph(graph_data)
@@ -62,11 +62,11 @@ def define_empty_typed_graph(ntypes, etypes):
     graph_data = {}
     for etype in etypes:
         for src_ntype in ntypes:
-            print(f"src: {src_ntype}")
-            print(f"ntypes: {ntypes}")
+            # print(f"src: {src_ntype}")
+            # print(f"ntypes: {ntypes}")
             dest_ntypes = ntypes.copy()
             dest_ntypes.remove(str(src_ntype))
-            print(f"dest_ntypes: {dest_ntypes}")
+            # print(f"dest_ntypes: {dest_ntypes}")
             for dest_ntype in dest_ntypes:
                 canonical_etype = (src_ntype, etype, dest_ntype)
                 nids = (torch.tensor([0]), torch.tensor([0]))
@@ -76,12 +76,25 @@ def define_empty_typed_graph(ntypes, etypes):
     empty_out_graph(g)
     return g
 
-room_types = ["exterior_wall", "living_room", "kitchen", "bedroom"]#, "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"] 
+room_types = ["exterior_wall", "living_room"]#, "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"] 
 edges_types = ["connection_corner", "room_adjacency"]
 g = define_empty_typed_graph(room_types, edges_types)
-g.add_edges(u=0, v=10, etype=('bedroom', 'room_adjacency', 'exterior_wall'))
-g.add_edges(u=0, v=3, etype=('bedroom', 'room_adjacency', 'exterior_wall'))
-print(g)
+g.add_edges(u=0, v=0, data={'hf': torch.tensor([[2,2]])}, etype=('living_room', 'room_adjacency', 'exterior_wall'))
+g.add_edges(u=0, v=1, etype=('living_room', 'room_adjacency', 'exterior_wall'))
+
+# try to add a feature vector
+# g.nodes['exterior_wall'].data['hf'] = torch.tensor([2])
+
+g.add_edges(u=0, v=2, etype=('living_room', 'room_adjacency', 'exterior_wall'))
+for c_et in g.canonical_etypes:
+    if g.num_edges(c_et) > 0:
+        print(f"Edge numbers: {c_et} : {g.num_edges(c_et)}")
+        # print(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}")
+print(g.ndata)
+print(g.num_nodes('exterior_wall'))
+# g.nodes['exterior_wall'].data['hf'] = torch.tensor([2]).repeat(11,1)
+print(g.edata['hf'])
+
 ###########################################################################################
 
 # # Heterograph
@@ -155,6 +168,15 @@ print(g)
 # # hg.add_edges()
 
 ###########################################################################################
+# Plotting
+
+
+# graph_data = {
+#     ('bedroom', 'room_adjacency', 'exterior_wall') : (torch.tensor([0,1]), torch.tensor([0,0])),
+#     ('bathroom', 'room_adjacency', 'exterior_wall') : (torch.tensor([0]), torch.tensor([0])),
+# }
+
+# g = dgl.heterograph(graph_data)
 
 # # Get node-type order
 # node_type_order = g.ntypes
@@ -172,17 +194,18 @@ print(g)
 
 # import matplotlib.pyplot as plt
 # import networkx as nx
-
+# colors = ['pink', 'purple', 'lightblue']
+# labels = {0: 'bathroom_0', 1: 'bedroom_0', 2: 'exterior_wall_0'}
 # options = {
-#     'node_color': ['black']+4*['blue'],
+#     # 'node_color': colors,
 #     'node_size': 300,
 #     'width': 1,
-#     'labels': labels,
+#     # 'labels': labels,
 #     'font_size': 20
 # }
 # G = dgl.to_networkx(g_homo)
 # plt.figure(figsize=[15,7])
-# nx.draw(G, with_labels = True, font_color='r', **options)
+# nx.draw(G, with_labels = True, labels = labels, node_color=colors, font_color='r', **options)
 # plt.show()
 
 
