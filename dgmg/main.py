@@ -18,10 +18,24 @@ from utils import Printer
 
 
 def main(opts):
-
-    if not os.path.exists("./model.pth"):
-
+    if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
+
+        # Initialize_model
+        model = DGMG(
+            v_max=opts["max_size"],
+            node_hidden_size=opts["node_hidden_size"],
+            num_prop_rounds=opts["num_propagation_rounds"],
+            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
+            # zero for now, no node features
+            node_features_size=opts["node_features_size"],
+            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+            room_types=opts["room_types"],
+            edge_types=opts["edge_types"],
+            gen_houses_dataset_only=opts["gen_data"],
+        )
+        if opts["gen_data"]:
+            model()
 
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
@@ -38,8 +52,7 @@ def main(opts):
         elif opts["dataset"] == "houses":
             from houses import HouseDataset, HouseModelEvaluation, HousePrinting
 
-            if not opts["gen_data"]:
-                dataset = HouseDataset(fname=opts["path_to_dataset"])
+            dataset = HouseDataset(fname=opts["path_to_dataset"])
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -50,27 +63,12 @@ def main(opts):
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 
-        if not opts["gen_data"]:
-            data_loader = DataLoader(
-                dataset,
-                batch_size=1,
-                shuffle=False,
-                num_workers=0,
-                collate_fn=dataset.collate_single,
-            )
-
-        # Initialize_model
-        model = DGMG(
-            v_max=opts["max_size"],
-            node_hidden_size=opts["node_hidden_size"],
-            num_prop_rounds=opts["num_propagation_rounds"],
-            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-            # zero for now, no node features
-            node_features_size=opts["node_features_size"],
-            edge_features_size=opts["edge_features_size"],
-            room_types=opts["room_types"],
-            edge_types=opts["edge_types"],
-            gen_houses_dataset_only=opts["gen_data"]
+        data_loader = DataLoader(
+            dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=dataset.collate_single,
         )
         # model = model.cuda()
 
@@ -79,14 +77,17 @@ def main(opts):
             optimizer = Adam(model.parameters(), lr=opts["lr"])
         else:
             raise ValueError("Unsupported argument for the optimizer")
-        
+
         try:
             from tensorboardX import SummaryWriter
-            writer = SummaryWriter(opts['log_dir'])
+
+            writer = SummaryWriter(opts["log_dir"])
         except ImportError:
-            print('If you want to use tensorboard, install tensorboardX with pip.')
+            print("If you want to use tensorboard, install tensorboardX with pip.")
             writer = None
-        train_printer = Printer(opts['nepochs'], len(dataset), opts['batch_size'], writer)
+        train_printer = Printer(
+            opts["nepochs"], len(dataset), opts["batch_size"], writer
+        )
 
         t2 = time.time()
 
@@ -100,14 +101,16 @@ def main(opts):
                 batch_number = 0
                 optimizer.zero_grad()
 
-                print("#######################\nBegin Training\n#######################")
+                print(
+                    "#######################\nBegin Training\n#######################"
+                )
                 print(f"Beginning batch {batch_number}")
                 for i, data in enumerate(data_loader):
                     # here, the "actions" refer to the cycle decision sequences
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    log_prob = model(actions=data) 
+                    log_prob = model(actions=data)
                     prob = log_prob.detach().exp()
 
                     loss_averaged = -log_prob / opts["batch_size"]
@@ -119,9 +122,13 @@ def main(opts):
                     batch_prob += prob_averaged.item()
                     batch_count += 1
 
-                    train_printer.update(epoch + 1, loss_averaged.item(), prob_averaged.item())
+                    train_printer.update(
+                        epoch + 1, loss_averaged.item(), prob_averaged.item()
+                    )
 
-                    # print(f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}")
+                    print(
+                        f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
+                    )
 
                     if batch_count % opts["batch_size"] == 0:
                         batch_number += 1
@@ -139,10 +146,12 @@ def main(opts):
                         batch_prob = 0
                         optimizer.zero_grad()
 
-
         t3 = time.time()
 
         model.eval()
+        print(
+            "#######################\nTraining complete, begin evaluation\n#######################"
+        )
         evaluator.rollout_and_examine(model, opts["num_generated_samples"])
         evaluator.write_summary()
 
@@ -155,7 +164,7 @@ def main(opts):
                     datetime.timedelta(seconds=t3 - t2)
                 )
             )
-        else: 
+        else:
             print("Training skipped")
         print(
             "It took {} to finish evaluation.".format(
@@ -204,6 +213,9 @@ def main(opts):
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
         model = torch.load("./model.pth")
         model.eval()
+        print(
+            "#######################\nGenerating sample houses!\n#######################"
+        )
         evaluator.rollout_and_examine(model, opts["num_generated_samples"])
         evaluator.write_summary()
         t2 = time.time()
@@ -212,7 +224,7 @@ def main(opts):
                 datetime.timedelta(seconds=t2 - t1)
             )
         )
-        del model.g
+        # del model.g
 
 
 if __name__ == "__main__":
@@ -223,21 +235,31 @@ if __name__ == "__main__":
 
     # dataset
     parser.add_argument(
-        "--dataset", choices=["cycles", "houses"], default="houses", help="dataset to use"
+        "--dataset",
+        choices=["cycles", "houses"],
+        default="houses",
+        help="dataset to use",
     )
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="houses_new_dataset.p",
+        default="houses_dataset.p",
         help="load the dataset if it exists, "
         "generate it and save to the path otherwise",
     )
 
     # train first, or just eval
-    parser.add_argument("-t", "--train", action='store_true', help="set True to train first")
+    parser.add_argument(
+        "-t", "--train", action="store_true", help="set True to train first"
+    )
 
     # set flag to only generate a houses dataset
-    parser.add_argument("-gd", "--gen_data", action='store_true', help="set True to only generate a houses dataset")
+    parser.add_argument(
+        "-gd",
+        "--gen_data",
+        action="store_true",
+        help="set True to only generate a houses dataset",
+    )
 
     # log
     parser.add_argument(
@@ -251,7 +273,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=10, #ALEX 10
+        default=10,  # ALEX 10
         help="batch size to use for training",
     )
     parser.add_argument(

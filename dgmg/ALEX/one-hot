@@ -1,0 +1,62 @@
+import torch
+
+def integer_to_one_hot(tensor, num_classes):
+    """
+    Convert a torch tensor containing a pair of integers into one-hot encoded format.
+
+    Args:
+    - tensor (torch.Tensor): A torch tensor containing a pair of integers.
+    - num_classes (int): The total number of classes or categories.
+
+    Returns:
+    - torch.Tensor: The one-hot encoded tensor.
+    """
+    # Check if the input tensor has the correct shape (1, 2)
+    if tensor.shape != (1, 2):
+        raise ValueError("Input tensor must have shape (1, 2) containing a pair of integers.")
+
+    # Extract the integers from the tensor
+    a, b = tensor[0]
+
+    # Initialize a zero-filled one-hot tensor
+    one_hot = torch.zeros(2, num_classes)
+
+    # Set the corresponding indices to 1
+    one_hot[0, a] = 1
+    one_hot[1, b] = 1
+
+    return one_hot
+
+
+def tensor_to_one_hot(tensor, num_classes):
+    """
+    Convert a torch tensor containing a pair of integers into one-hot encoded format.
+
+    Args:
+    - tensor (torch.Tensor): A torch tensor containing a pair of integers.
+    - num_classes (int): The total number of classes or categories.
+
+    Returns:
+    - torch.Tensor: The one-hot encoded tensor.
+    """
+
+    # Initialize a zero-filled one-hot tensor
+    one_hot = torch.zeros(tensor.shape[1], num_classes)
+
+    # Set the corresponding indices to 1
+    for id in range(tensor.shape[1]):
+        one_hot[id, tensor[0][id]] = 1
+
+    # Expand dims to keep indexing the same as for the original tensor
+    return one_hot[None,:]
+
+# Example usage:
+input_tensor = torch.tensor([[3, 7]])  # Replace with your pair of integers
+num_classes = 9  # Number of classes in the range [0, 8]
+one_hot_encoded = tensor_to_one_hot(input_tensor, num_classes)
+print(one_hot_encoded)
+print(one_hot_encoded[0])
+print(one_hot_encoded[0][0])
+print([idx for idx, val in enumerate(one_hot_encoded[0][0]) if val == 1])
+numeral_values = [[idx for idx, val in enumerate(one_hot_prediction) if val == 1] for one_hot_prediction in one_hot_encoded[0]]
+print(torch.tensor(numeral_values).reshape(1,-1))

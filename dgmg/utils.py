@@ -244,3 +244,25 @@ class Printer(object):
                 epoch, self.num_epochs, self._get_current_batch(),
                 self.num_batches, self.batch_loss, self.batch_prob))
             self._reset()
+
+def tensor_to_one_hot(tensor, num_classes):
+    """
+    Convert a torch tensor containing a pair of integers into one-hot encoded format.
+
+    Args:
+    - tensor (torch.Tensor): A torch tensor containing a pair of integers.
+    - num_classes (int): The total number of classes or categories.
+
+    Returns:
+    - torch.Tensor: The one-hot encoded tensor.
+    """
+
+    # Initialize a zero-filled one-hot tensor
+    one_hot = torch.zeros(tensor.shape[1], num_classes)
+
+    # Set the corresponding indices to 1
+    for id in range(tensor.shape[1]):
+        one_hot[id, tensor[0][id]] = 1
+
+    # Expand dims to keep indexing the same as for the original tensor
+    return one_hot[None,:]
