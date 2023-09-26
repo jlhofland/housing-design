@@ -26,13 +26,14 @@
         //     dest_room_index, 
         //     connection_feature(s) cols 4 & 5
         // ]
-        // Room types: {0:"exterior_wall", 1:"living_room", 2:"kitchen", 3:"bedroom", 4:"bathroom", 5:"missing", 6:"closet", 7:"balcony", 8:"corridor", 9:"dining_room", 10:"laundry_room"}  
+        // Room types: {0:"exterior_wall", ... only exterior walls used for corner connections}  
         // Connection types: {0: "exterior wall corners", 1:"room adjacencies"}
  
-        // Walls/Corners
+        // Walls/Corners (one set of edges for clockwise connections, and another for counter-clockwise connections)
         // Connection features: 
-        //      0.0 {interior wall angle}
+        //      0.0 {interior wall angle from src wall to dest wall by right-hand rule}
         //      0.1 {garbage, zeros - this is to make all edges have two features}
+        // CLOCKWISE CORNERS
         [0, 0, 0, 1, 0, 0], 
         [0, 1, 0, 2, -90, 0], 
         [0, 2, 0, 3, 0, 0], 
@@ -40,8 +41,18 @@
         [0, 4, 0, 5, 0, 0],
         [0, 5, 0, 6, -90, 0],
         [0, 6, 0, 0, -90, 0]
+        // COUNTER-CLOCKWISE CORNERS (will be automatically generated)
+        // [0, 1, 0, 0, 0, 0], 
+        // [0, 2, 0, 1, 90, 0], 
+        // [0, 3, 0, 2, 0, 0], 
+        // [0, 4, 0, 3, 90, 0],
+        // [0, 5, 0, 4, 0, 0],
+        // [0, 6, 0, 5, 90, 0],
+        // [0, 0, 0, 6, 90, 0]
     ],
         // Room Adjacencies (CURRENTLY from src to dest, but not repeated the other way around with reversed direction)
+        // Room types: {0:"exterior_wall", 1:"living_room", 2:"kitchen", 3:"bedroom", 4:"bathroom", 5:"missing", 6:"closet", 7:"balcony", 8:"corridor", 9:"dining_room", 10:"laundry_room"}  
+
                 // Connection features: 
         //      1.0 {0: "wall with door", 1: "wall without door", 2: "no wall, no door"}
         //      1.1 (direction from src to dest is ...): [0, 1,  2, 3,  4, 5,  6, 7,  8] == 
