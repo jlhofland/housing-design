@@ -5,7 +5,7 @@ and will be loaded when setting up."""
 
 def dataset_based_configure(opts):
     if opts["dataset"] == "cycles":
-        ds_configure = cycles_configure
+        raise ValueError("Cycles dataset no longer supported")
     elif opts["dataset"] == "houses":
         ds_configure = houses_configure
     else:

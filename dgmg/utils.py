@@ -84,14 +84,7 @@ def setup(args):
     ), "Expect path to dataset to be set."
     if not os.path.exists(opts["path_to_dataset"]):
         if opts["dataset"] == "cycles":
-            from cycles import generate_dataset
-
-            generate_dataset(
-                opts["min_size"],
-                opts["max_size"],
-                opts["ds_size"],
-                opts["path_to_dataset"],
-            )
+            raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
             print("WE GOT HOUSES GIRL")
         else:
