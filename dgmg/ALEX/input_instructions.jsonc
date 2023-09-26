@@ -7,16 +7,16 @@
     "number_of_bathrooms": 1,
     "bathrooms_plus?" : false,
     "exterior_walls": [
-        // Input exterior walls as a list of pairs of coordinates + exterior door (yes/no) [ [ xi_0, yi_0, xf_0, yf_0, D0 ], [ xi_1, yi_1, xf_1, yf_1, D1 ] , … ]. 
-        // OR Input exterior walls as a list of wall lengths and exterior door (yes/no) [ [L0, D0], [L1, D1], ... ]
+        // Input exterior walls as a list of pairs of coordinates + exterior door (yes/no) [ [ ID0, xi_0, yi_0, xf_0, yf_0, D0 ], [ ID1, xi_1, yi_1, xf_1, yf_1, D1 ] , … ]. 
+        // OR Input exterior walls as a list of wall lengths and exterior door (yes/no) [ [ID0, L0, D0], [ID1, L1, D1], ... ]
         // ALEX-TODO: check for exterior wall validity. Ensure that exterior walls form a chain. Thus, xf_0 == xi_1 and xf_N == xi_0, and for y. 
-        [0,0,0,1],
-        [0,1,0,2],
-        [0,2,1,2],
-        [1,2,2,2],
-        [2,2,2,1],
-        [2,1,2,0],
-        [2,0,0,0]
+        [0,0,0,0,1,1],
+        [1,0,1,0,2,0],
+        [2,0,2,1,2,0],
+        [3,1,2,2,2,0],
+        [4,2,2,2,1,0],
+        [5,2,1,2,0,0],
+        [6,2,0,0,0,0]
     ],
     "connections_corners": [
         // [
