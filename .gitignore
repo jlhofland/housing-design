@@ -1,4 +1,5 @@
+results/*
 dgmg/results/*
 *.pyc
 housegan_clean_data.npy
-dgmg/.vscode*
+*.vscode*

@@ -40,13 +40,16 @@ class ConditionVec(nn.Module):
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
         # ALEX-TODO: set LSTM input_dim dynamically and process exterior wall sequence of (x0, y0, x1, y1, D) OR (L, D) both
+
+        # expand connections 
+
         lstm_hidden_units = 64  # Adjust as needed
         exterior_walls_input_size = exterior_walls_sequence[0].size()[0]
         connections_corners_input_size = (
             connections_corners[0].size()[0] + corner_type_edge_features[0].size()[0]
         )
         connections_rooms_input_size = connections_rooms[0].size()[0]
-        # Encode the sequences
+        # Sequence encoders
         exterior_walls_encoder = LSTMEncoder(
             input_dim=exterior_walls_input_size, hidden_dim=lstm_hidden_units
         )
@@ -56,14 +59,18 @@ class ConditionVec(nn.Module):
         connections_rooms_encoder = LSTMEncoder(
             input_dim=connections_rooms_input_size, hidden_dim=lstm_hidden_units
         )
-
+        
+        # Encode the sequences
+            # walls
         exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
+            # corners
         connections_corners_encoded = connections_corners_encoder(
             torch.cat(
                 [connections_corners.type(torch.float32), corner_type_edge_features],
                 dim=1,
             )
         )
+            # rooms
         connections_rooms_encoded = connections_rooms_encoder(
             connections_rooms.type(torch.float32)
         )
@@ -636,20 +643,20 @@ class apply_partial_graph_input_completion(nn.Module):
 
         # Extract wall features
         exterior_walls_input_size = exterior_walls_sequence[0].size()[0]
-        if exterior_walls_input_size == 5:
+        if exterior_walls_input_size == 6:
             exterior_walls_features = [[], []]
             for wall in exterior_walls_sequence:
                 wall = wall.numpy()
-                wall_start = wall[0:2]
-                wall_end = wall[2:4]
+                wall_start = wall[1:3]
+                wall_end = wall[3:5]
                 wall_length = np.linalg.norm(wall_end - wall_start)
                 exterior_walls_features[0].append(wall_length)
                 exterior_walls_features[1].append(wall[-1])
             exterior_walls_features = torch.tensor(
                 exterior_walls_features, dtype=torch.float32
             ).reshape(-1, 2)
-        elif exterior_walls_input_size == 2:
-            exterior_walls_features = exterior_walls_sequence
+        elif exterior_walls_input_size == 3:
+            exterior_walls_features = exterior_walls_sequence[:,1:]
         else:
             raise ValueError(
                 "Unsupported exterior wall sequence format. Should be (x0, y0, x1, y1, D) OR (L, D)"
@@ -675,16 +682,18 @@ class apply_partial_graph_input_completion(nn.Module):
         #     if g.num_edges(c_et) >= 0:
         #         print(f"ET: {c_et} : {g.num_edges(c_et)}")
 
+        # Add clockwise "corner-type" edges
         for connection in connections_corners_sequence:
             src_type, dest_type = (
                 self.room_types[connection[0].item()],
                 self.room_types[connection[2].item()],
             )
             etype = (src_type, "corner_edge", dest_type)
-            g.add_edges(u=connection[1].item(), v=connection[3].item(), etype=etype)
             assert (
                 src_type == "exterior_wall" and dest_type == "exterior_wall"
             ), "Only exterior walls use corners"
+            g.add_edges(u=connection[1].item(), v=connection[3].item(), etype=etype)        
+
         for connection in connections_rooms_sequence:
             # Add forward edge
             assert [
@@ -697,10 +706,6 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.room_types[connection[2].item()],
             )
             e_feat = connection[4:].tolist()
-            # print(torch.tensor([e_feat]))
-            # print(g.edata[etype])
-            # import time
-            # time.sleep(20)
             g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
@@ -740,20 +745,7 @@ class apply_partial_graph_input_completion(nn.Module):
         # Add in corner edge features
         g.edges["corner_edge"].data["e"] = corner_type_edge_features
 
-        # # Add in room-adjacency edge features
-        # # First, initialize room_adjacency edges with garbage
-        # for etype in g.canonical_etypes:
-        #     if etype == ('exterior_wall', 'corner_edge', 'exterior_wall'):
-        #         continue
-        #     num_etype = g.num_edges(etype)
-        #     g.edges[etype].data['e'] = torch.tensor([99,99]).repeat(num_etype,1)
-        # # Then, add in actual feature
-        # for connection in connections_rooms_sequence:
-        #     etype_tuple = (self.room_types[connection[0].item()], 'room_adjacency_edge', self.room_types[connection[2].item()])
-        #     edge_id = g.edge_ids(connection[1].item(), connection[3].item(), etype=etype_tuple)
-        #     g.edges[etype_tuple].data['e'][edge_id] = connection[4:]
-
-        # Uncomment to examine filled graph structure
+        # # Uncomment to examine filled graph structure
         # for c_et in g.canonical_etypes:
         #     if g.num_edges(c_et) > 0:
         #         print(f"Edge numbers: {c_et} : {g.num_edges(c_et)}")

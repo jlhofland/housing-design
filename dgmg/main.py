@@ -39,16 +39,7 @@ def main(opts):
 
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
-            from cycles import CycleDataset, CycleModelEvaluation, CyclePrinting
-
-            dataset = CycleDataset(fname=opts["path_to_dataset"])
-            evaluator = CycleModelEvaluation(
-                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
-            )
-            printer = CyclePrinting(
-                num_epochs=opts["nepochs"],
-                num_batches=opts["ds_size"] // opts["batch_size"],
-            )
+            raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
             from houses import HouseDataset, HouseModelEvaluation, HousePrinting
 
@@ -184,21 +175,11 @@ def main(opts):
         torch.save(model, "./model.pth")
 
     elif os.path.exists("./model.pth"):
-        # model = DGMG(v_max=20, node_hidden_size=16, num_prop_rounds=2)
-        # model.load_state_dict(state_dict)
-        # model.eval()
         t1 = time.time()
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
-            from cycles import CycleModelEvaluation, CyclePrinting
+            raise ValueError("Cycles dataset no longer supported")
 
-            evaluator = CycleModelEvaluation(
-                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
-            )
-            printer = CyclePrinting(
-                num_epochs=opts["nepochs"],
-                num_batches=opts["ds_size"] // opts["batch_size"],
-            )
         elif opts["dataset"] == "houses":
             from houses import HouseModelEvaluation, HousePrinting
 
@@ -224,7 +205,7 @@ def main(opts):
                 datetime.timedelta(seconds=t2 - t1)
             )
         )
-        # del model.g
+        del model.g
 
 
 if __name__ == "__main__":

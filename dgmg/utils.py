@@ -140,8 +140,17 @@ def parse_input_json(file_path):
     # Parse walls / connections into tensors
     exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
     connections_corners = torch.LongTensor(layout["connections_corners"])[:, 0:4]
+        # Add reverse corner edges
+    num_corners = connections_corners.shape[0]
+    connections_corners = connections_corners.repeat(2,1)
+    connections_corners[num_corners:, [1,3]] = connections_corners[num_corners:, [3,1]]
     connections_rooms = torch.LongTensor(layout["connections_rooms"])
-    corner_type_edge_features = torch.tensor(layout["connections_corners"], dtype=torch.float32)[:, 4:].reshape(-1,2)
+        # Adding bi-directional corner edges (one for CW and one for CCW edges)
+    corner_type_edge_features_cw = torch.tensor(layout["connections_corners"], dtype=torch.float32)[:, 4:].reshape(-1,2)
+    corner_type_edge_features_ccw = corner_type_edge_features_cw.clone()
+    corner_type_edge_features_ccw[:,0] = -corner_type_edge_features_ccw[:,0]
+    corner_type_edge_features = torch.cat([corner_type_edge_features_cw, corner_type_edge_features_ccw], dim=0)
+    corner_type_edge_features[:,1]  = torch.zeros((corner_type_edge_features.size()[0]))
 
     return room_number_data, exterior_walls_sequence, connections_corners, connections_rooms, corner_type_edge_features
 
