@@ -171,8 +171,8 @@ class Generator(nn.Module):
         f = x.view(-1, 16, self.init_size, self.init_size)
         # combine masks and noise vectors
         m = self.enc_1(given_m)
-        print(f"f_shape: {f.shape}")
-        print(f"m_shape: {m.shape}")
+        # print(f"f_shape: {f.shape}")
+        # print(f"m_shape: {m.shape}")
         f = torch.cat([f, m], 1)
         f = self.enc_2(f)
         # apply Conv-MPN
