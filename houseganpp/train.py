@@ -66,7 +66,7 @@ parser.add_argument(
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/Repos/housegan/2018_house_gan/dataset_paper",
+    default="/home/evalexii/Documents/IAAIP/datasets",
     help="path to the dataset",
 )
 parser.add_argument(
@@ -116,6 +116,7 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
         real_mks = Variable(mks.type(Tensor))
         given_nds = Variable(nds.type(Tensor))
         given_eds = eds
+        graph = [given_nds, given_eds]
         # Select random nodes
         ind_fixed_nodes, _ = selectNodesTypes(nd_to_sample, batch_size, nds)
         # build input

@@ -575,7 +575,9 @@ class FloorplanGraphDataset(Dataset):
 				rooms_mks[k, x0:x1+1, y0:y1+1] = 1.0
 		
 		nodes = one_hot_embedding(nodes)[:, 1:]
+        # ADD NODE FEATURES HERE
 		nodes = torch.FloatTensor(nodes)
+        # ADD EDGE FEATURES HERE(including EDGE TYPE)
 		edges = torch.LongTensor(edges)
 		rooms_mks = torch.FloatTensor(rooms_mks)
 		rooms_mks = self.transform(rooms_mks)
