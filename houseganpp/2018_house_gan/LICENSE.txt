@@ -1,0 +1,43 @@
+data LICENSE
+For non-commercial and scientific research purposes
+----------------------------------------------------
+Please read carefully the following terms and conditions and any accompanying documentation before you download and/or use the data. By downloading and/or using the data, you acknowledge that you have read these terms and conditions, understand them, and agree to be bound by them. If you do not agree with these terms and conditions, you must not download and/or use the data.
+
+
+Ownership
+----------
+The data has been developed at the Simon Fraser University (hereinafter "SFU") and is owned by and proprietary material of the Simon Fraser University.
+
+
+License Grant
+-------------
+SFU grants you a non-exclusive, non-transferable, free of charge right:
+	* To install the data on computers owned, leased or otherwise controlled by you and/or your organisation;
+	* To use the data for the sole purpose of performing non-commercial scientific research, non-commercial education, or non-commercial artistic projects.
+
+Any other use, in particular any use for commercial purposes, is prohibited. This includes, without limitation, incorporation in a commercial product, use in a commercial service, or production of other artefacts for commercial purposes. The data may not be reproduced, modified and/or made available in any form to any third party without SFU’s prior written permission.
+
+
+Disclaimer of Representations and Warranties
+--------------------------------------------
+You expressly acknowledge and agree that the data results from basic research, is provided “AS IS”, may contain errors, and that any use of the data is at your sole risk. SFU MAKES NO REPRESENTATIONS OR WARRANTIES OF ANY KIND CONCERNING THE data, NEITHER EXPRESS NOR IMPLIED, AND THE ABSENCE OF ANY LEGAL OR ACTUAL DEFECTS, WHETHER DISCOVERABLE OR NOT. Specifically, and not to limit the foregoing, SFU makes no representations or warranties (i) regarding the merchantability or fitness for a particular purpose of the data, (ii) that the use of the data will not infringe any patents, copyrights or other intellectual property rights of a third party, and (iii) that the use of the data will not cause any damage of any kind to you or a third party.
+
+
+Limitation of Liability
+-----------------------
+Under no circumstances shall SFU be liable for any incidental, special, indirect or consequential damages arising out of or relating to this license, including but not limited to, any lost profits, business interruption, loss of programs or other data, or all other commercial damages or losses, even if advised of the possibility thereof.
+
+
+No Maintenance Services
+-----------------------
+You understand and agree that SFU is under no obligation to provide either maintenance services, update services, notices of latent defects, or corrections of defects with regard to the data. SFU nevertheless reserves the right to update, modify, or discontinue the data at any time.
+
+
+Publication
+----------------------
+You agree to cite the following paper when reporting results with this dataset.
+
+House-GAN: Relational Generative Adversarial Networks for Graph-constrained House Layout Generation.
+Nelson Nauata, Kai-Hung Chang, Chin-Yi Cheng, Greg Mori and Yasutaka Furukawa.
+arXiv:2003.06988
+
