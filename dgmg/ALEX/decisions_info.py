@@ -15,6 +15,9 @@ decisions : list
     - If i = 2, 
         j specifies a tuple of (destination node type (string), destination node id (int)) for the added edge. Destination node must have been created before the decision via an i=0 tuple. 
         k specifies the edge feature vector of format: torch.tensor([[a, b]]) where a in range(3) and b in range(9)
+        a = {0: "wall with door", 1: "wall without door", 2: "no wall, no door"}
+        b = (direction from src to dest is ...): [0, 1,  2, 3,  4, 5,  6, 7,  8] == 
+        //                                       [E, NE, N, NW, W, SW, S, SE, undefined] 
 
 """
 
