@@ -1,4 +1,5 @@
 import json
+import os
 import torch
 import torch.nn as nn
 
@@ -7,9 +8,8 @@ def parse_input_json(file_path):
     with open(file_path, 'r') as openfile:
         # Reading from json file into python dict
         layout = json.load(openfile)
-    print("ssasd")
-    print(layout)
 
+    # Manually parse numerical/boolean data into tensor
     room_number_data = torch.zeros(6)
     room_number_data[0] = layout["number_of_living_rooms"]
     room_number_data[1] = int(layout["living_rooms_plus?"])
@@ -18,12 +18,13 @@ def parse_input_json(file_path):
     room_number_data[4] = layout["number_of_bathrooms"]
     room_number_data[5] = int(layout["bathrooms_plus?"])
 
+    # Parse walls / connections into tensors
     exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
     connections_sequence = torch.tensor(layout["connections"], dtype=torch.float32)
 
     return room_number_data, exterior_walls_sequence, connections_sequence
 
-room_number_data, exterior_walls_sequence, connections_sequence = parse_input_json("./input.jsonc")
+room_number_data, exterior_walls_sequence, connections_sequence = parse_input_json(os.getcwd() + "/input.jsonc")
 
 # Encode the wall and connection sequences with LSTMs
 # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector

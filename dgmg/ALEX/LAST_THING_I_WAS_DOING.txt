@@ -1,0 +1,35 @@
+Seems to be training but...
+
+I do not think the features are being predicted and errors contributing to the loss, so...
+
+Need to fix that somehow
+
+
+ fix it. with peace in your day and your heart.
+
+ Also this error upon inference:
+
+
+ Coming here...
+Traceback (most recent call last):
+  File "main.py", line 275, in <module>
+    main(opts)
+  File "main.py", line 146, in main
+    evaluator.rollout_and_examine(model, opts["num_generated_samples"])
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/houses.py", line 289, in rollout_and_examine
+    sampled_graph = model()
+  File "/home/evalexii/.local/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 702, in forward
+    return self.forward_inference()
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 671, in forward_inference
+    self.choose_dest_and_update(src_type=last_added_node_type)
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 629, in choose_dest_and_update
+    self.choose_dest_agent(self.g, a, src_type=src_type)
+  File "/home/evalexii/.local/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 366, in forward
+    edge_features_u2v, edge_features_v2u = self._initialize_edge_repr(g, src_embed=src_embed_expand[0], dest_embed=possible_dests_embed[sample])
+  File "/home/evalexii/Documents/IAAIP/housing-design/dgmg/model.py", line 314, in _initialize_edge_repr
+    e_input = torch.cat([src_embed, dest_embed, self.graph_op["embed"](g)], dim=1)
+IndexError: Dimension out of range (expected to be in range of [-1, 0], but got 1)
