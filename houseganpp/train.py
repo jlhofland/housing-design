@@ -47,7 +47,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=3, help="interval between image sampling"
+    "--sample_interval", type=int, default=200, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
