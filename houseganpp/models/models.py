@@ -111,18 +111,38 @@ class CMP(nn.Module):
     def forward(self, feats, edges=None):
         # allocate memory
         dtype, device = feats.dtype, feats.device
+        # edges is already this shape, so idk the purpose
         edges = edges.view(-1, 3)
+        # Number of nodes (feature volumes) and edges
         V, E = feats.size(0), edges.size(0)
+        # empty feature volumes to hold pooled features
+        # interesting because pos and negative are the same size? Same 'V' rows... x the (16x8x8)
         pooled_v_pos = torch.zeros(V, feats.shape[-3], feats.shape[-1], feats.shape[-1], dtype=dtype, device=device)
         pooled_v_neg = torch.zeros(V, feats.shape[-3], feats.shape[-1], feats.shape[-1], dtype=dtype, device=device)
-        # pool positive edges
+        
+        # pool positive edges (edge does exist)
+        # Recall that edges are of the form [(src, exists (1,-1), dest), ...]
+        # Find all edges that exist. 
         pos_inds = torch.where(edges[:, 1] > 0)
+        # extract out tensor of [all src node id's, then all dest node id's]
         pos_v_src = torch.cat([edges[pos_inds[0], 0], edges[pos_inds[0], 2]]).long()
+        # extract out reversed tensor of [all dest node id's, then all src node id's]
         pos_v_dst = torch.cat([edges[pos_inds[0], 2], edges[pos_inds[0], 0]]).long()
+        # ensure pos_v_src node list is in contiguous memory, then extract feature volumes for correpsonding nodes in pos_v_src
+        # so, first half is the src feature volumes, second half is the dest feature volumes, period.
         pos_vecs_src = feats[pos_v_src.contiguous()]
+        # "pos_v_dst.view(-1, 1, 1, 1)" -> a shape (N+, 1, 1, 1) tensor of node ids, all dest then all src
+        # the "expand_as(pos_vecs_src)" creates feature volumes (16x8x8), one for each node id in pos_v_dst, filled with that node id
         pos_v_dst = pos_v_dst.view(-1, 1, 1, 1).expand_as(pos_vecs_src).to(device)
-        pooled_v_pos = torch.scatter_add(pooled_v_pos, 0, pos_v_dst, pos_vecs_src)
-        # pool negative edges
+        # torch.scatter_add(input=, dim=, index=, src=)
+        # we are going to add src[i,j,k,l] to input[index[i,j,k,l], j, k, l]
+        # index[i,j,k,l] will be a number from 0 to V
+        # or maybe easier to think that index[i] is a volume of indices
+        # then, we add src[i] to input[index[i], j, k, l]
+        # for our sakes, for now, maybe we can just assume that it is performing the aggregation (sum of feature volumes) along edges
+        pooled_v_pos = torch.scatter_add(input=pooled_v_pos, dim=0, index=pos_v_dst, src=pos_vecs_src)
+        
+        # pool negative edges (edge does not exist)
         neg_inds = torch.where(edges[:, 1] < 0)
         neg_v_src = torch.cat([edges[neg_inds[0], 0], edges[neg_inds[0], 2]]).long()
         neg_v_dst = torch.cat([edges[neg_inds[0], 2], edges[neg_inds[0], 0]]).long()
@@ -176,6 +196,10 @@ class Generator(nn.Module):
         f = torch.cat([f, m], 1)
         f = self.enc_2(f)
         # apply Conv-MPN
+        # First step of Convolutional Message-Passing NN
+        # Passing in a set of cat'd masks/feature volumes and the edges connecting them
+        # This (*f.shape[1:]) deposits the output shape for each node representation following CMP
+        # The -1 brings along the number of nodes
         x = self.cmp_1(f, given_w).view(-1, *f.shape[1:])
         x = self.upsample_1(x)
         x = self.cmp_2(x, given_w).view(-1, *x.shape[1:])   
