@@ -1,4 +1,6 @@
 results/*
+houseganpp/exps/*
+houseganpp/checkpoints/exp*
 dgmg/results/*
 *.pyc
 housegan_clean_data.npy
