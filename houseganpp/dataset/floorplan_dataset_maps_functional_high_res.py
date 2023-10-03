@@ -477,7 +477,7 @@ class FloorplanGraphDataset_RP(Dataset):
 sets = {'A':[1, 3], 'B':[4, 6], 'C':[7, 9], 'D':[10, 12], 'E':[13, 100]}
 
 class FloorplanGraphDataset(Dataset):
-	def __init__(self, shapes_path, transform=None, target_set=None, split='train'):
+	def __init__(self, shapes_path, transform=None, target_set='D', split='train'):
 		# This dataset houses train/eval splits of a filtered (not too small rooms, not bad values) LIFULL FP dataset
 		# housed in self.subgraphs
 		# Then, __getitem__ returns room masks (format/content?) and nodes (format/content?) and edges (format/content?)
@@ -565,6 +565,8 @@ class FloorplanGraphDataset(Dataset):
 		boundary_bb = np.concatenate([tl, br])
 
 		# build input graph
+        # TODO replace this line, or edit build_graph, or add a step afterwards to augment the list of bboxes, nodes, and edges
+        # with the extra exterior_wall nodes and corner edges
 		rooms_bbs, nodes, edges = self.build_graph(rooms_bbs, rooms_type) 
 		im_size = 64
 		rooms_mks = np.zeros((nodes.shape[0], im_size, im_size))
