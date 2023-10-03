@@ -51,6 +51,55 @@ def one_hot_embedding(labels, num_classes=11):
     # print(" label is",labels)
     return y[labels]
 
+def is_adjacent(box_a, box_b, threshold=0.03):
+    x0, y0, x1, y1 = box_a
+    x2, y2, x3, y3 = box_b
+
+    h1, h2 = x1 - x0, x3 - x2
+    w1, w2 = y1 - y0, y3 - y2
+
+    xc1, xc2 = (x0 + x1) / 2.0, (x2 + x3) / 2.0
+    yc1, yc2 = (y0 + y1) / 2.0, (y2 + y3) / 2.0
+
+    delta_x = np.abs(xc2 - xc1) - (h1 + h2) / 2.0
+    delta_y = np.abs(yc2 - yc1) - (w1 + w2) / 2.0
+
+    delta = max(delta_x, delta_y)
+
+    return delta < threshold
+
+def build_graph(self, bbs, types):
+		# create edges -- make order
+		triples = []
+		nodes = types
+		bbs = np.array(bbs)
+        
+		# encode connections
+		for k in range(len(nodes)):
+			for l in range(len(nodes)):
+				if True:#l > k:
+					nd0, bb0 = nodes[k], bbs[k]
+					nd1, bb1 = nodes[l], bbs[l]
+					if is_adjacent(bb0, bb1):
+						if 'train' in self.split:
+							triples.append([k, 1, l])
+						else:
+							triples.append([k, 1, l])
+					else:
+						if 'train' in self.split:
+							triples.append([k, -1, l])
+						else:
+							triples.append([k, -1, l])
+
+		# convert to array
+		nodes = np.array(nodes)
+		triples = np.array(triples)
+		bbs = np.array(bbs)
+		return bbs, nodes, triples
+
+
+
+
 original_data_path = '../datasets/housegan_clean_data.npy'
 new_data_path = '../datasets/HHGPP_train_data.npy'
 
