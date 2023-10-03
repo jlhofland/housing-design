@@ -36,7 +36,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--n_cpu", type=int, default=16, help="number of cpu threads to use during batch generation")
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
 parser.add_argument("--checkpoint", type=str, default='./checkpoints/pretrained.pth', help="checkpoint path")
-parser.add_argument("--data_path", type=str, default='./data/sample_list.txt', help="path to dataset list file")
+parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets", help="path to dataset list file")
 parser.add_argument("--out", type=str, default='./dump', help="output folder")
 opt = parser.parse_args()
 print(opt)
@@ -54,7 +54,7 @@ if torch.cuda.is_available():
     model.cuda()
 
 # initialize dataset iterator
-fp_dataset_test = FloorplanGraphDataset(opt.data_path, transforms.Normalize(mean=[0.5], std=[0.5]), split='test')
+fp_dataset_test = FloorplanGraphDataset(opt.data_path, transforms.Normalize(mean=[0.5], std=[0.5]), split='eval')
 fp_loader = torch.utils.data.DataLoader(fp_dataset_test, 
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
