@@ -101,14 +101,64 @@ def conv_block(in_channels, out_channels, k, s, p, act=None, upsample=False, spe
 
 # Convolutional Message Passing
 class CMP(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, feat_size):
         super(CMP, self).__init__()
         self.in_channels = in_channels
         self.encoder = nn.Sequential(
             *conv_block(3*in_channels, 2*in_channels, 3, 1, 1, act="leaky"),
             *conv_block(2*in_channels, 2*in_channels, 3, 1, 1, act="leaky"),
             *conv_block(2*in_channels, in_channels, 3, 1, 1, act="leaky"))
-    def forward(self, feats, edges=None):
+        self.feat_size = feat_size
+        self.expander = nn.Linear(2, 16 * feat_size ** 2)
+        self.consolidator = nn.Sequential(*conv_block(2*in_channels, in_channels, 3, 1, 1, act="leaky"))
+    def forward(self, feats, edges=None, edge_features=None):
+        # allocate memory
+        dtype, device = feats.dtype, feats.device
+        edges = edges.view(-1, 3)
+        V, E = feats.size(0), edges.size(0)
+        pooled_v_pos = torch.zeros(V, feats.shape[-3], feats.shape[-1], feats.shape[-1], dtype=dtype, device=device)
+        pooled_v_neg = torch.zeros(V, feats.shape[-3], feats.shape[-1], feats.shape[-1], dtype=dtype, device=device)
+        
+        # Find all edges that exist. 
+        # positive edge ids
+        pos_inds = torch.where(edges[:, 1] > 0)
+        # positive src-node ids
+        pos_v_src = edges[pos_inds[0], 0].long()
+        # positive dest-node ids
+        pos_v_dst = edges[pos_inds[0], 2].long()
+        # positive src-node feature volumes
+        pos_vecs_src = feats[pos_v_src.contiguous()]
+        # TODO: 
+        # bring in edge features at positive edge indices
+        # convert to size feats.shape[-3] x feats.shape[-1] x feats.shape[-1]
+        if True:
+            edge_features = torch.rand(pos_inds[0].shape[0], 2, device=device)
+            expanded_edge_features = self.expander(edge_features)
+        else:    
+            expanded_edge_features = self.expander(edge_features[pos_inds[0]])
+        formatted_edge_features = expanded_edge_features.view(-1, 16, self.feat_size, self.feat_size)
+        # concatenate with positive src-node feature volumes with dim=1
+        pos_edge_and_node_features_src = torch.cat([pos_vecs_src, formatted_edge_features], dim=1)
+        # pass through conv-block to bring back down to feats.shape[-3] x feats.shape[-1] x feats.shape[-1]
+        # result = "gated feature volumes" for the source nodes
+        edge_gated_features_src = self.consolidator(pos_edge_and_node_features_src)
+        pos_v_dst = pos_v_dst.view(-1, 1, 1, 1).expand_as(edge_gated_features_src).to(device)
+        edge_gated_pooled_v_pos = torch.scatter_add(input=pooled_v_pos, dim=0, index=pos_v_dst, src=edge_gated_features_src)
+        
+        # pool negative edges (edge does not exist)
+        # I GUESS WE DON'T NEED TO INTEGRATE THE EDGE FEATURES WHEN THERE'S NO EDGES??
+        neg_inds = torch.where(edges[:, 1] < 0)
+        neg_v_src = torch.cat([edges[neg_inds[0], 0], edges[neg_inds[0], 2]]).long()
+        neg_v_dst = torch.cat([edges[neg_inds[0], 2], edges[neg_inds[0], 0]]).long()
+        neg_vecs_src = feats[neg_v_src.contiguous()]
+        neg_v_dst = neg_v_dst.view(-1, 1, 1, 1).expand_as(neg_vecs_src).to(device)
+        pooled_v_neg = torch.scatter_add(pooled_v_neg, 0, neg_v_dst, neg_vecs_src)
+        # update nodes features
+        enc_in = torch.cat([feats, edge_gated_pooled_v_pos, pooled_v_neg], 1)
+        out = self.encoder(enc_in)
+        return out
+    
+    def forward_old(self, feats, edges=None):
         # allocate memory
         dtype, device = feats.dtype, feats.device
         # edges is already this shape, so idk the purpose
@@ -124,6 +174,12 @@ class CMP(nn.Module):
         # Recall that edges are of the form [(src, exists (1,-1), dest), ...]
         # Find all edges that exist. 
         pos_inds = torch.where(edges[:, 1] > 0)
+        # Note: the following two lines of code INDICATE that the edges and message passing are both BI-DIRECTIONAL
+        #   So, if there is an edge between k and l, messages from k go to l, and vice versa
+        #   However, if "edges" includes edges from k to l AND from l to k (not default in HG++), then this implementation
+        #   would perform message passing twice. Instead, I think we can have "edges" list edges in both directions
+        #   and then concat edge features, pass through a conv block to bring the channels back down (praying for no loss of information),
+        #   and then finally perform the pooling and encoding. /pray
         # extract out tensor of [all src node id's, then all dest node id's]
         pos_v_src = torch.cat([edges[pos_inds[0], 0], edges[pos_inds[0], 2]]).long()
         # extract out reversed tensor of [all dest node id's, then all src node id's]
@@ -162,10 +218,10 @@ class Generator(nn.Module):
         self.upsample_1 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
         self.upsample_2 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
         self.upsample_3 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
-        self.cmp_1 = CMP(in_channels=16)
-        self.cmp_2 = CMP(in_channels=16)
-        self.cmp_3 = CMP(in_channels=16)
-        self.cmp_4 = CMP(in_channels=16)
+        self.cmp_1 = CMP(in_channels=16, feat_size=8)
+        self.cmp_2 = CMP(in_channels=16, feat_size=16)
+        self.cmp_3 = CMP(in_channels=16, feat_size=32)
+        self.cmp_4 = CMP(in_channels=16, feat_size=64)
         self.decoder = nn.Sequential(
             *conv_block(16, 256, 3, 1, 1, act="leaky"),
             *conv_block(256, 128, 3, 1, 1, act="leaky"),    
@@ -180,8 +236,8 @@ class Generator(nn.Module):
             *conv_block(32, 32, 3, 1, 1, act="leaky"),
             *conv_block(32, 16, 3, 1, 1, act="leaky"))   
 
-    def forward(self, z, given_m=None, given_y=None, given_w=None, given_v=None):
-        # z, given_m=given_masks_in, given_y=given_nds, given_w=given_eds
+    def forward(self, z, given_m=None, given_y=None, given_w=None, given_ed_f=None):
+        # z, given_m=given_masks_in, given_y=given_nds, given_w=given_eds, given_ed_f=given_edge_features
         z = z.view(-1, 128)
         # include nodes
         y = given_y.view(-1, 18)
@@ -200,13 +256,13 @@ class Generator(nn.Module):
         # Passing in a set of cat'd masks/feature volumes and the edges connecting them
         # This (*f.shape[1:]) deposits the output shape for each node representation following CMP
         # The -1 brings along the number of nodes
-        x = self.cmp_1(f, given_w).view(-1, *f.shape[1:])
+        x = self.cmp_1(f, given_w, given_ed_f).view(-1, *f.shape[1:])
         x = self.upsample_1(x)
-        x = self.cmp_2(x, given_w).view(-1, *x.shape[1:])   
+        x = self.cmp_2(x, given_w, given_ed_f).view(-1, *x.shape[1:])   
         x = self.upsample_2(x)
-        x = self.cmp_3(x, given_w).view(-1, *x.shape[1:])   
+        x = self.cmp_3(x, given_w, given_ed_f).view(-1, *x.shape[1:])   
         x = self.upsample_3(x)
-        x = self.cmp_4(x, given_w).view(-1, *x.shape[1:])   
+        x = self.cmp_4(x, given_w, given_ed_f).view(-1, *x.shape[1:])   
         x = self.decoder(x.view(-1, x.shape[1], *x.shape[2:]))
         x = x.view(-1, *x.shape[2:])
         return x
@@ -220,13 +276,13 @@ class Discriminator(nn.Module):
             *conv_block(16, 16, 3, 1, 1, act="leaky"),
             *conv_block(16, 16, 3, 1, 1, act="leaky"))
         self.l1 = nn.Sequential(nn.Linear(18, 8 * 64 ** 2))
-        self.cmp_1 = CMP(in_channels=16)
+        self.cmp_1 = CMP(in_channels=16, feat_size=64)
         self.downsample_1 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_2 = CMP(in_channels=16)
+        self.cmp_2 = CMP(in_channels=16, feat_size=32)
         self.downsample_2 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_3 = CMP(in_channels=16)
+        self.cmp_3 = CMP(in_channels=16, feat_size=16)
         self.downsample_3 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
-        self.cmp_4 = CMP(in_channels=16)
+        self.cmp_4 = CMP(in_channels=16, feat_size=8)
 
         self.decoder = nn.Sequential(
             *conv_block(16, 256, 3, 2, 1, act="leaky"),
@@ -237,7 +293,7 @@ class Discriminator(nn.Module):
         self.fc_layer_global = nn.Sequential(nn.Linear(128, 1))
         self.fc_layer_local = nn.Sequential(nn.Linear(128, 1))
 
-    def forward(self, x, given_y=None, given_w=None, nd_to_sample=None):
+    def forward(self, x, given_y=None, given_w=None, nd_to_sample=None, given_ed_f=None):
         x = x.view(-1, 1, 64, 64)
 
         # include nodes
@@ -247,13 +303,13 @@ class Discriminator(nn.Module):
         x = torch.cat([x, y], 1)
         # message passing -- Conv-MPN
         x = self.encoder(x)
-        x = self.cmp_1(x, given_w).view(-1, *x.shape[1:])  
+        x = self.cmp_1(x, given_w, given_ed_f).view(-1, *x.shape[1:])  
         x = self.downsample_1(x)
-        x = self.cmp_2(x, given_w).view(-1, *x.shape[1:])
+        x = self.cmp_2(x, given_w, given_ed_f).view(-1, *x.shape[1:])
         x = self.downsample_2(x)
-        x = self.cmp_3(x, given_w).view(-1, *x.shape[1:])
+        x = self.cmp_3(x, given_w, given_ed_f).view(-1, *x.shape[1:])
         x = self.downsample_3(x)
-        x = self.cmp_4(x, given_w).view(-1, *x.shape[1:])
+        x = self.cmp_4(x, given_w, given_ed_f).view(-1, *x.shape[1:])
         x = self.decoder(x.view(-1, x.shape[1], *x.shape[2:]))
         x = x.view(-1, x.shape[1])
         # global loss
