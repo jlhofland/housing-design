@@ -612,7 +612,7 @@ class FloorplanGraphDataset(Dataset):
 		# encode connections
 		for k in range(len(nodes)):
 			for l in range(len(nodes)):
-				if l > k:
+				if True:#l > k:
 					nd0, bb0 = nodes[k], bbs[k]
 					nd1, bb1 = nodes[l], bbs[l]
 					if is_adjacent(bb0, bb1):
