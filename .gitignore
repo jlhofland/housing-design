@@ -1,7 +1,9 @@
 results/*
+houseganpp/dump/*
 houseganpp/exps/*
 houseganpp/checkpoints/exp*
 dgmg/results/*
 *.pyc
 housegan_clean_data.npy
 *.vscode*
+houseganpp/HGPP/*
