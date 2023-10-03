@@ -1,4 +1,5 @@
 results/*
+houseganpp/exps/*
 houseganpp/checkpoints/exp*
 dgmg/results/*
 *.pyc

@@ -1,0 +1,13 @@
+Things we talked about yesterday:
+
+Need to finish training dataset for DGMG to confirm operational (Alex)
+
+Need to obtain sets of node and edge features for each training house (Alex's scripts should be able to pull this out)
+
+Need to modify the housegan_clean_data.npy file to include these node and edge features as additional dictionary entries
+
+Need to modify dataset/dataloader to pull out the node and edge features for each training sample
+
+Need to expand the node type vector to have our number of room types and space for the exterior wall features (other rooms get -1)
+
+Need to add layers before CMP.encode() to incorporate edge features in pooled messages from neighbors. This will be difficult. Expect to expand the edge features into a volume to cat with node features. Need to consider the bidirectional nature of our edges. Need to consider how housegan uses pos/neg edges and whether or not we need to do that.
