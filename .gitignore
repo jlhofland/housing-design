@@ -6,3 +6,4 @@ dgmg/results/*
 *.pyc
 housegan_clean_data.npy
 *.vscode*
+houseganpp/HGPP/*
