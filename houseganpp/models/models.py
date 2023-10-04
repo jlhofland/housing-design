@@ -27,7 +27,7 @@ def add_pool(x, nd_to_sample):
 
 def compute_gradient_penalty(D, x, x_fake, given_y=None, given_w=None, \
                              nd_to_sample=None, data_parallel=None, \
-                             ed_to_sample=None):
+                             ed_to_sample=None, given_ed_f=None):
     # x: real masks
     # x_fake: fake masks
     # given_y: a list of nodes (node-type one-hot encoding)
@@ -55,10 +55,10 @@ def compute_gradient_penalty(D, x, x_fake, given_y=None, given_w=None, \
     x_both = Variable(x_both, requires_grad=True)
     grad_outputs = torch.ones(batch_size, 1).to(device)
     if data_parallel:
-        _output = data_parallel(D, (x_both, given_y, given_w, nd_to_sample), indices)
+        _output = data_parallel(D, (x_both, given_y, given_w, nd_to_sample, given_ed_f), indices)
     else:
         # And then we have the discriminator score this mix??
-        _output = D(x_both, given_y, given_w, nd_to_sample)
+        _output = D(x_both, given_y, given_w, nd_to_sample, given_ed_f)
     # The code calculates the gradient of the discriminator's output with respect to the mixed data (x_both). 
     # It then computes the gradient penalty as the squared norm of these gradients minus 1, averaged over the batch. 
     # This penalty term encourages the gradients of the discriminator to have a norm close to 1, promoting smoother 

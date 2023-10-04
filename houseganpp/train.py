@@ -104,33 +104,35 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
         torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
     )
     generatorTest = generatorTest.eval()
-    #ALEX_start
+
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
         generatorTest.to(device)
-    # generatorTest.cuda()
-    #ALEX_end
+
     with torch.no_grad():
         # Unpack batch
-        mks, nds, eds, nd_to_sample, ed_to_sample = next(iter(fp_loader_test))
+        mks, nds, eds, eds_f, nd_to_sample, ed_to_sample = next(iter(fp_loader_test))
         real_mks = Variable(mks.type(Tensor))
         given_nds = Variable(nds.type(Tensor))
         given_eds = eds
-        graph = [given_nds, given_eds]
+        given_eds_f = eds_f
+        graph = [given_nds, given_eds, given_eds_f]
         # Select random nodes
         ind_fixed_nodes, _ = selectNodesTypes(nd_to_sample, batch_size, nds)
         # build input
         state = {"masks": real_mks, "fixed_nodes": ind_fixed_nodes}
-        z, given_masks_in, given_nds, given_eds = _init_input(graph, state)
-        z, given_masks_in, given_nds, given_eds = (
+        # TODO: update _init_input to consider eds_f
+        z, given_masks_in, given_nds, given_eds, given_eds_f = _init_input(graph, state)
+        z, given_masks_in, given_nds, given_eds, given_eds_f = (
             z.to(device),
             given_masks_in.to(device),
             given_nds.to(device),
             given_eds.to(device),
+            given_eds_f.to(device)
         )
         # gen_mks = generator(z, given_masks_in, given_nds, given_eds)
         # Generate a batch of images
-        gen_mks = generatorTest(z, given_masks_in, given_nds, given_eds)
+        gen_mks = generatorTest(z, given_masks_in, given_nds, given_eds, given_eds_f)
         # Generate image tensors
         real_imgs_tensor = combine_images(
             real_mks, given_nds, given_eds, nd_to_sample, ed_to_sample
@@ -202,7 +204,7 @@ batches_done = 0
 for epoch in range(opt.n_epochs):
     for i, batch in enumerate(fp_loader):
         # Unpack batch
-        mks, nds, eds, nd_to_sample, ed_to_sample = batch
+        mks, nds, eds, nd_to_sample, ed_to_sample, eds_f = batch
         # print(f"mks:\n Shape:{mks.shape}\n {mks}")
         # print(f"nds:\n Shape:{nds.shape}\n {nds}")
         # print(f"eds:\n Shape:{eds.shape}\n {eds}")
@@ -217,7 +219,8 @@ for epoch in range(opt.n_epochs):
         real_mks = Variable(mks.type(Tensor))
         given_nds = Variable(nds.type(Tensor))
         given_eds = eds
-        graph = [given_nds, given_eds]
+        given_eds_f = eds_f
+        graph = [given_nds, given_eds, given_eds_f]
         # Set grads on
         for p in discriminator.parameters():
             p.requires_grad = True
@@ -231,22 +234,24 @@ for epoch in range(opt.n_epochs):
 
         # Generate a batch of images
         state = {"masks": real_mks, "fixed_nodes": ind_fixed_nodes}
-        z, given_masks_in, given_nds, given_eds = _init_input(graph, state)
-        z, given_masks_in, given_nds, given_eds = (
+        z, given_masks_in, given_nds, given_eds, given_eds_f = _init_input(graph, state)
+        z, given_masks_in, given_nds, given_eds, given_eds_f = (
             z.to(device),
             given_masks_in.to(device),
             given_nds.to(device),
             given_eds.to(device),
+            given_eds_f.to(device)
         )
-        gen_mks = generator(z, given_masks_in, given_nds, given_eds)
+        gen_mks = generator(z, given_masks_in, given_nds, given_eds, given_eds_f)
         # Real images
-        real_validity = discriminator(real_mks, given_nds, given_eds, nd_to_sample)
+        real_validity = discriminator(real_mks, given_nds, given_eds, nd_to_sample, given_eds_f)
         # Fake images
         fake_validity = discriminator(
             gen_mks.detach(),
             given_nds.detach(),
             given_eds.detach(),
             nd_to_sample.detach(),
+            given_eds_f.detach()
         )
         # Measure discriminator's ability to classify real from generated samples
         gradient_penalty = compute_gradient_penalty(
@@ -281,9 +286,9 @@ for epoch in range(opt.n_epochs):
             z = Variable(
                 Tensor(np.random.normal(0, 1, tuple((real_mks.shape[0], 128))))
             )
-            gen_mks = generator(z, given_masks_in, given_nds, given_eds)
+            gen_mks = generator(z, given_masks_in, given_nds, given_eds, given_eds_f)
             # Score fake images
-            fake_validity = discriminator(gen_mks, given_nds, given_eds, nd_to_sample)
+            fake_validity = discriminator(gen_mks, given_nds, given_eds, nd_to_sample, given_eds_f)
             # Compute L1 loss
             err = (
                 distance_loss(
@@ -320,7 +325,7 @@ for epoch in range(opt.n_epochs):
             batches_done += opt.n_critic
 
 
-def reader(filename):
+"""def reader(filename):
     with open(filename) as f:
         info = json.load(f)
         rms_bbs = np.asarray(info["boxes"])
@@ -348,3 +353,4 @@ def reader(filename):
         for l in range(len(eds_to_rms)):
             eds_to_rms_tmp.append([eds_to_rms[l][0]])
         return rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp
+"""

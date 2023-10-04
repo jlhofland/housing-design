@@ -23,15 +23,15 @@ Inputs:
     
 Outputs:
   
-  A modified .npy file named "HHGPP_(train/eval)_data.npy" with the following information:
+  A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
       "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (need to expand the EW edges into single pixel-wide bbs).
-      "nds": all graph nodes in an Nx11 list, with each node represented as a one-hot encoded vector with 11 classes. see one_hot_embedding below.
+      "nds": all graph nodes (types/features) in an Nx13 list, with each node represented as a one-hot encoded vector with 11 classes concatenated with two feature elements. see one_hot_embedding below.
       "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
-      "nds_f": all graph node features in an Nx2 list. 
       "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
       Note that N == number of graph nodes, and E == number of graph edges
+      Note that eval_data and test_data from from housegan_valid_data.npy, split in half between them
 """
 
 import torch
