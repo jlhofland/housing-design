@@ -28,7 +28,7 @@ from skimage.transform import resize as imresize
 # import pycocotools.mask as mask_utils
 import glob
 from PIL import Image, ImageDraw, ImageOps, ImageFilter, ImageFont, ImageColor
-from pygraphviz import *
+#from pygraphviz import *
 import cv2
 from torchvision.utils import save_image
 import networkx as nx
