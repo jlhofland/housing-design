@@ -2,6 +2,7 @@ import argparse
 import os
 import numpy as np
 import math
+import json
 
 from dataset.floorplan_dataset_maps_functional_high_res import (
     FloorplanGraphDataset,

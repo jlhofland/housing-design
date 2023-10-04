@@ -25,16 +25,15 @@ Outputs:
   
   A modified .npy file named "HHGPP_(train/eval)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
-      "nds": all graph nodes in an Nx11 list, with each node represented as a one-hot encoded vector with 11 classes. see one_hot_embedding below.
-      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (need to expand the EW edges into single pixel-wide bbs).
-      "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
-      "nds_f": all graph node features in an Nx2 list. 
-      "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
+      [CHECK] "nds": all graph nodes with features in an (N x (11+2)) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
+      [CHECK] "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (need to expand the EW edges into single pixel-wide bbs, they have all been expanded 1 pixel in the positive x or y direction).
+      [Done for RA edges, TODO for CE edges] "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
+      [Done for RA edges, TODO for CE edges]  "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
       Note that N == number of graph nodes, and E == number of graph edges
 
 [ [ [nds],[bbs],[eds],[nds_f],[eds_f] ],
- [ [],[],... ],
+  [ [],[],[],[],[] ],
  ...]
 """
 
@@ -78,24 +77,91 @@ def is_adjacent(boxA, boxB, threshold = 0.03):
 
     return delta < threshold
 
+def is_edge_adjacent(edgeA, boxB, threshold = 0.03):
+    xa0, ya0, xa1, ya1 = edgeA
+    xb0, yb0, xb1, yb1 = boxB
+
+    wa, wb = xa1 - xa0, xb1 - xb0
+    ha, hb = ya1 - ya0, yb1 - yb0
+
+    xca, xcb = (xa0 + xa1) / 2.0, (xb0 + xb1) / 2.0
+    yca, ycb = (ya0 + ya1) / 2.0, (yb0 + yb1) / 2.0
+    
+    delta_x = np.abs(xcb - xca) - (wa + wb) / 2.0
+    delta_y = np.abs(ycb - yca) - (ha + hb) / 2.0
+
+    if ha == 0:
+        return delta_x < threshold 
+
+    if wa == 0:
+        return delta_y < threshold
+
+def get_exterior_walls(rooms_connected, edges, doors):
+    indices = [i for i, item in enumerate(rooms_connected) if len(item) == 1]
+    exterior_walls = [[i,edges[i],1] if i in doors else [i,edges[i],0] for i in indices]
+    return exterior_walls
+
+def edge_length(edge):
+    x0, y0, x1, y1 = edge
+    if x0 != x1 and y0 != y1:
+        raise Exception("Edge length called for bounding box of width > 0")
+    if x0 == x1:
+        return abs(y1-y0)
+    if y0 == y1:
+        return abs(x1-x0)
+
+def give_edge_width_1(edge):
+    x0, y0, x1, y1 = edge
+    if x0 != x1 and y0 != y1:
+        raise Exception("Give edge width called for bounding box of width > 0")
+    if x0 == x1:
+        x1 = x1 + 1
+    if y0 == y1:
+        y1 = y1 + 1
+    return [x0, y0, x1, y1]
+
+
 
 
 new_data = []
 for home in data:
     '''
-      TODO Exterior walls have to be added (with width 1 and node features (door or not)) (not sure if this will come from Alex's program)
-      TODO Node features (which features are needed again? I thought (room_type, ???) )
-      TODO Edge features (these will come from Alex's program)
+      REMINDER Room nodes have no features [-1,-1]
+      TODO Exterior walls as nodes with corresponding node features [length, door/no door], bounding boxes and edges
+      TODO Edge features ([relative angle, door or not] for EW, [wall with door/wall without door/no wall, relative direction (E/NE/N/NW/W/SW/S/SE)])
       TODO Edges between exterior walls have to be added, I think they will follow from the algorithm used now, only the edge type will have to be changed.
     '''
-    # Creating the node list (nodes) for later use and the list of one-hot encoded node vectors (nds), (Nx11)
+    # Creating the node list (nodes) for later use and the list of one-hot encoded node vectors (nds), (Nx(11+2))
     nodes = home[0]
-    nds = one_hot_embedding(nodes)[:,1:]
-    nds = torch.FloatTensor(nds)
 
-    # Creating the bounding boxes (Nx4)
+    nds = one_hot_embedding(nodes)
+    nds = torch.FloatTensor(nds)
+    nds = torch.cat((nds, torch.FloatTensor([[-1,-1] for i in range(len(nodes))])), 1)
+
+    # Creating the bounding boxes for the rooms (Nx4)
     bbs = np.array([bb.tolist() for bb in home[1]]) / 256 # Values between 0 and 1
+
+
+
+    # Find Exterior Walls and add to nodes and bounding boxes list
+    exterior_walls = get_exterior_walls(home[3], np.array(home[2])[:,:4], home[4])
+    ex_wall_nodes = []
+    ex_wall_bbs = []
+    for nod in exterior_walls:
+        ex_wall_nodes.append([nod[0] + len(nds), edge_length(nod[1]), nod[2]])
+        ex_wall_bbs.append(give_edge_width_1(nod[1]))
+    ex_wall_nodes = np.array(ex_wall_nodes)
+    ex_wall_bbs = np.array(ex_wall_bbs) / 256 # Bounding boxes of Exterior Walls values scaled between 0 and 1
+
+
+    ew_nds = one_hot_embedding([0 for i in exterior_walls]) # Create nodes of type 0 for Exterior Walls
+    ew_nds = torch.FloatTensor(ew_nds)
+    ew_nds = torch.cat((ew_nds, torch.FloatTensor(ex_wall_nodes[:,1:])), 1) # Add EW node features to list
+
+    nds = torch.cat((nds, ew_nds), 0) # Add room nodes and Exterior Wall nodes to the same nds node list
     
+    bbs = np.concatenate((bbs, ex_wall_bbs), 0)
+
     # Creating the edges (Ex3), [src_node_id, +1/-1, dest_node_id]
     triples = []
     for k in range(len(nodes)):     # From each node
@@ -110,18 +176,28 @@ for home in data:
     triples = np.array(triples)
     eds = torch.LongTensor(triples)
 
-    # Creating the node features list (Nx2)
-    for n in range(len(nodes)):
-        nds_f = [home[0][n],0] # Add node features (room type and .....?????)
 
-    # Creating the edge features list (Ex3), [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
+    # Creating the edge features list (Ex3), [edge type (0 - CE, or 1 - RA), Door Feature, Angle Feature]
+    # CREATE LIST WITH ALL EDGES WITH STANDARD FEATURES (DOOR FEATURE = 0 and Angle Feature = 0)
+    all_edges = np.array(home[2])[:,:4] / 256 # all edges with values between 0 and 1
 
-
+    edges_f = [[1, 0, 0] for i in range(len(eds))] # Create list with standard features [RA=1, Door=0, Dir=0]
+    for id in home[4]: # For each edge in edges with doors list
+        i=0
+        for ed in range(len(eds)): # For each edge in eds
+            if eds[ed][1] == 1: # But only if there is a room adjacency
+                # print(f'checking adjacency with {all_edges[id]} for room {bbs[ed[0]]}')
+                if is_edge_adjacent(all_edges[id], bbs[eds[ed][0]]): # Check whether edge with door is adjacent with both rooms of edge
+                    if is_edge_adjacent(all_edges[id], bbs[eds[ed][2]]):
+                        edges_f[i][1] = 1
+    
+    eds_f = torch.FloatTensor(edges_f)
+            
 
 
 
     # # This converts bounding boxes into masks that fit the needed image size
-    # im_size = 16
+    # im_size = 64
     # rooms_mks = np.zeros((len(nodes), im_size, im_size)) # Dim = (# nodes, image size, image size)
     # for k, (rm, bb) in enumerate(zip(nodes, bbs)):
     #   if rm > 0:
@@ -133,23 +209,24 @@ for home in data:
     
     
 
-    print('home = ')
-    print(home)
-    print('nodes = ')
-    print(nodes)
-    print('bounding boxes = ')
-    print(bbs)
-    #print('room masks = ')
-    #print(rooms_mks)
-    print('triples = ')
-    print(triples)
-    print('edges = ')
-    print(eds)
-    print('nodes features = ')
-    print(nds_f)
+    # print('home = ')
+    # print(home[0])
+    # print('nodes = ')
+    # print(nds)
+    # print('bounding boxes = ')
+    # print(bbs)
+    # print('room masks = ')
+    # print(rooms_mks)
+    # print('triples = ')
+    # print(triples)
+    # print('edges = ')
+    # print(eds)
+    # print('edge features = ')
+    # print(edges_f)
+    # print('nodes features = ')
+    # print(nds_f)
 
     break
-
 
 
 
