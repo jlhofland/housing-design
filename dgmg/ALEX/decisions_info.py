@@ -1,5 +1,5 @@
 node_types = ['balcony', 'bathroom', 'bedroom', 'closet', 'corridor', 'dining_room', 'exterior_wall', 'kitchen', 'laundry_room', 'living_room', 'missing']
-e.g: (balcony 0, balcony 1, bathroom 0, bathroom 1, bathroom 2 
+# e.g: (balcony 0, balcony 1, bathroom 0, bathroom 1, bathroom 2 
 """
 
 Home generation decision list
