@@ -60,7 +60,7 @@ class FloorplanGraphDataset_RP(Dataset):
             a = []
             h = h + 1
             if split == "train":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -75,7 +75,7 @@ class FloorplanGraphDataset_RP(Dataset):
                             self.subgraphs.append(a)
                 self.augment = True
             elif split == "eval":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -90,7 +90,7 @@ class FloorplanGraphDataset_RP(Dataset):
                             self.subgraphs.append(a)
                 self.augment = False
             elif split == "test":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -532,10 +532,11 @@ class FloorplanGraphDataset(Dataset):
 
 		# load data
 		graph = self.subgraphs[index]
-		rooms_type = graph[0]
-		rooms_bbs = graph[1]
+		rooms_type = graph[0] #List of room types
+		rooms_bbs = graph[1] # List of bounding boxes of the rooms
 
-		if self.augment:
+        # Training data will be augmented (rotated and flipped randomly) and the new bounding boxes (x0,y0,x1,y1) are being calculated
+		if self.augment: # True for training data, false for eval data.
 			rot = random.randint(0, 3)*90.0
 			flip = random.randint(0, 1) == 1
 			rooms_bbs_aug = []
@@ -554,15 +555,15 @@ class FloorplanGraphDataset(Dataset):
 # 		rooms_type = [rooms_type[i] for i in order_inds]
 		rooms_bbs = rooms_bbs/256.0
 
-		# extract boundary box and centralize
-		tl = np.min(rooms_bbs[:, :2], 0)
-		br = np.max(rooms_bbs[:, 2:], 0)
-		shift = (tl+br)/2.0 - 0.5
-		rooms_bbs[:, :2] -= shift
-		rooms_bbs[:, 2:] -= shift
-		tl -= shift
-		br -= shift
-		boundary_bb = np.concatenate([tl, br])
+		# # extract complete boundary box and centralize, this was not being used
+		# tl = np.min(rooms_bbs[:, :2], 0) # This is bottom left instead of top left
+		# br = np.max(rooms_bbs[:, 2:], 0) # And this is top right instead of bottom right
+		# shift = (tl+br)/2.0 - 0.5
+		# rooms_bbs[:, :2] -= shift
+		# rooms_bbs[:, 2:] -= shift
+		# tl -= shift
+		# br -= shift
+		# boundary_bb = np.concatenate([tl, br])
 
 		# build input graph
         # TODO replace this line, or edit build_graph, or add a step afterwards to augment the list of bboxes, nodes, and edges
@@ -612,7 +613,7 @@ class FloorplanGraphDataset(Dataset):
 		# encode connections
 		for k in range(len(nodes)):
 			for l in range(len(nodes)):
-				if True:#l > k:
+				if l > k:
 					nd0, bb0 = nodes[k], bbs[k]
 					nd1, bb1 = nodes[l], bbs[l]
 					if is_adjacent(bb0, bb1):
@@ -686,7 +687,7 @@ def floorplan_collate_fn(batch):
     all_node_to_sample, all_edge_to_sample = [], []
     node_offset = 0
     eds_sets = []
-    for i, (rooms_mks, nodes, edges) in enumerate(batch):
+    for i, (rooms_mks, nodes, edges) in enumerate(batch): # This triples comes from __getitem__
         O, T = nodes.size(0), edges.size(0)
         all_rooms_mks.append(rooms_mks)
         all_nodes.append(nodes)
