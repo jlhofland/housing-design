@@ -152,10 +152,12 @@ def fix_nodes(prev_mks, ind_fixed_nodes):
 
 def _init_input(graph, prev_state=None, mask_size=64):
     # initialize graph
-    given_nds, given_eds = graph
+    given_nds, given_eds, given_eds_f = graph
     given_nds = given_nds.float()
     # given_eds = torch.tensor(given_eds).long()
     given_eds = given_eds.clone().detach().long()
+    given_eds_f = given_eds_f.float()
+
     z = torch.randn(len(given_nds), 128).float()
     # unpack
     fixed_nodes = prev_state["fixed_nodes"]
@@ -167,7 +169,7 @@ def _init_input(graph, prev_state=None, mask_size=64):
     # initialize masks
     # given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
     given_masks_in = fix_nodes(prev_mks, fixed_nodes.clone().detach())
-    return z, given_masks_in, given_nds, given_eds
+    return z, given_masks_in, given_nds, given_eds, given_eds_f
 
 
 def pad_im(cr_im, final_size=256, bkg_color="white"):
