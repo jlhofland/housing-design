@@ -144,7 +144,7 @@ for home in data:
     print('triples = ')
     print(triples)
     print('edges = ')
-    print(edges)
+    print(eds)
     print('nodes features = ')
     print(nds_f)
 
