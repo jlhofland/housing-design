@@ -1027,6 +1027,8 @@ class DGMG(nn.Module):
 
     def finalize_partial_graph_inference(self, init_actions):
         for ntype in self.g.ntypes:
+            if ntype == "exterior_wall":
+                continue
             if self.g.num_nodes(ntype) > 0:
                 for node_id in range(self.g.num_nodes(ntype)):
                     num_trials = 0
