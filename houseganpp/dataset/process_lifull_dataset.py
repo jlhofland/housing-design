@@ -23,7 +23,7 @@ Inputs:
     
 Outputs:
   
-  A modified .npy file named "HHGPP_(train/eval)_data.npy" with the following information:
+  A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
       [CHECK] "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
       [CHECK] "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (need to expand the EW edges into single pixel-wide bbs, they have all been expanded 1 pixel in the positive x or y direction).

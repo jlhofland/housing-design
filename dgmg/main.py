@@ -43,7 +43,7 @@ def main(opts):
         elif opts["dataset"] == "houses":
             from houses import HouseDataset, HouseModelEvaluation, HousePrinting
 
-            dataset = HouseDataset(fname=opts["path_to_dataset"])
+            dataset = torch.utils.data.TensorDataset(HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -96,12 +96,12 @@ def main(opts):
                     "#######################\nBegin Training\n#######################"
                 )
                 print(f"Beginning batch {batch_number}")
-                for i, data in enumerate(data_loader):
+                for i, (init_data, data) in enumerate(data_loader):
                     # here, the "actions" refer to the cycle decision sequences
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    log_prob = model(actions=data)
+                    log_prob = model(init_actions=init_data, actions=data)
                     prob = log_prob.detach().exp()
 
                     loss_averaged = -log_prob / opts["batch_size"]
@@ -225,6 +225,13 @@ if __name__ == "__main__":
         "--path-to-dataset",
         type=str,
         default="houses_dataset.p",
+        help="load the dataset if it exists, "
+        "generate it and save to the path otherwise",
+    )
+    parser.add_argument(
+        "--path-to-initialization-dataset",
+        type=str,
+        default="houses_initialization_dataset.p",
         help="load the dataset if it exists, "
         "generate it and save to the path otherwise",
     )

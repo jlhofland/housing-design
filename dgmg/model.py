@@ -1,6 +1,6 @@
 from functools import partial
 from utils import parse_input_json, tensor_to_one_hot
-from houses import generate_home_dataset
+from houses import HouseDataset, generate_home_dataset
 
 import os
 import dgl
@@ -41,7 +41,7 @@ class ConditionVec(nn.Module):
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
         # ALEX-TODO: set LSTM input_dim dynamically and process exterior wall sequence of (x0, y0, x1, y1, D) OR (L, D) both
 
-        # expand connections 
+        # expand connections
 
         lstm_hidden_units = 64  # Adjust as needed
         exterior_walls_input_size = exterior_walls_sequence[0].size()[0]
@@ -59,18 +59,18 @@ class ConditionVec(nn.Module):
         connections_rooms_encoder = LSTMEncoder(
             input_dim=connections_rooms_input_size, hidden_dim=lstm_hidden_units
         )
-        
+
         # Encode the sequences
-            # walls
+        # walls
         exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
-            # corners
+        # corners
         connections_corners_encoded = connections_corners_encoder(
             torch.cat(
                 [connections_corners.type(torch.float32), corner_type_edge_features],
                 dim=1,
             )
         )
-            # rooms
+        # rooms
         connections_rooms_encoded = connections_rooms_encoder(
             connections_rooms.type(torch.float32)
         )
@@ -436,8 +436,9 @@ class ChooseDestAndUpdate(nn.Module):
     def prepare_training(self):
         self.log_prob = []
 
-    def forward(self, g, action, src_type):
-        src_id = g.num_nodes(src_type) - 1
+    def forward(self, g, action, src_type, src_id=None):
+        if src_id == None:
+            src_id = g.num_nodes(src_type) - 1
 
         # info for action variable - recall:
         # action[0] specifies a tuple of (destination node type, destination node id) for the added edge. Dest must be created before the decision.
@@ -585,6 +586,7 @@ class apply_partial_graph_input_completion(nn.Module):
         self.room_types = room_types
         self.canonical_edge_types = canonical_edge_types
         self.gen_houses_dataset_only = gen_houses_dataset_only
+        self.g = None
 
     def define_empty_typed_graph(self, ntypes, canonical_edge_types, edge_feature_size):
         def remove_all_edges(g):
@@ -631,6 +633,9 @@ class apply_partial_graph_input_completion(nn.Module):
         empty_out_graph(g)
         return g
 
+    def finish_off_partial_graph(self):
+        pass
+
     def forward(self):
         # Retrieve input data
         (
@@ -656,14 +661,14 @@ class apply_partial_graph_input_completion(nn.Module):
                 exterior_walls_features, dtype=torch.float32
             ).reshape(-1, 2)
         elif exterior_walls_input_size == 3:
-            exterior_walls_features = exterior_walls_sequence[:,1:]
+            exterior_walls_features = exterior_walls_sequence[:, 1:]
         else:
             raise ValueError(
                 "Unsupported exterior wall sequence format. Should be (x0, y0, x1, y1, D) OR (L, D)"
             )
 
         # Initialize empty graph with all node and edge types pre-defined
-        g = self.define_empty_typed_graph(
+        self.g = self.define_empty_typed_graph(
             ntypes=self.room_types,
             canonical_edge_types=self.canonical_edge_types,
             edge_feature_size=len(connections_rooms_sequence[0][4:].tolist()),
@@ -672,10 +677,10 @@ class apply_partial_graph_input_completion(nn.Module):
         def initializer(shape, dtype, ctx, range):
             return torch.tensor([-1], dtype=dtype, device=ctx).repeat(shape)
 
-        for ntype in g.ntypes:
-            g.set_n_initializer(initializer, ntype=ntype)
-        for etype in g.canonical_etypes:
-            g.set_e_initializer(initializer, etype=etype)
+        for ntype in self.g.ntypes:
+            self.g.set_n_initializer(initializer, ntype=ntype)
+        for etype in self.g.canonical_etypes:
+            self.g.set_e_initializer(initializer, etype=etype)
 
         # Uncomment to show empty graph structure
         # for c_et in g.canonical_etypes:
@@ -692,7 +697,9 @@ class apply_partial_graph_input_completion(nn.Module):
             assert (
                 src_type == "exterior_wall" and dest_type == "exterior_wall"
             ), "Only exterior walls use corners"
-            g.add_edges(u=connection[1].item(), v=connection[3].item(), etype=etype)        
+            self.g.add_edges(
+                u=connection[1].item(), v=connection[3].item(), etype=etype
+            )
 
         for connection in connections_rooms_sequence:
             # Add forward edge
@@ -706,7 +713,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.room_types[connection[2].item()],
             )
             e_feat = connection[4:].tolist()
-            g.add_edges(
+            self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
                 data={"e": torch.tensor([e_feat], dtype=torch.float32)},
@@ -719,7 +726,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.room_types[connection[0].item()],
             )
             if 0 <= e_feat[1] and e_feat[1] <= 7:
-                g.add_edges(
+                self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
                     data={
@@ -730,7 +737,7 @@ class apply_partial_graph_input_completion(nn.Module):
                     etype=etype,
                 )
             elif e_feat[1] == 8:
-                g.add_edges(
+                self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
                     data={"e": torch.tensor([e_feat], dtype=torch.float32)},
@@ -740,10 +747,10 @@ class apply_partial_graph_input_completion(nn.Module):
                 raise ValueError("Direction feature is wrong. Should be in range(9)")
 
         # Add in wall-node features
-        g.nodes["exterior_wall"].data["hf"] = exterior_walls_features
+        self.g.nodes["exterior_wall"].data["hf"] = exterior_walls_features
 
         # Add in corner edge features
-        g.edges["corner_edge"].data["e"] = corner_type_edge_features
+        self.g.edges["corner_edge"].data["e"] = corner_type_edge_features
 
         # # Uncomment to examine filled graph structure
         # for c_et in g.canonical_etypes:
@@ -752,10 +759,10 @@ class apply_partial_graph_input_completion(nn.Module):
         #         print(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}")
 
         if self.gen_houses_dataset_only:
-            generate_home_dataset(g, 100)
+            generate_home_dataset(self.g, 100)
             raise ValueError("You made enough!")
 
-        return g
+        return self.g
 
 
 class DGMG(nn.Module):
@@ -769,6 +776,7 @@ class DGMG(nn.Module):
         room_types,
         edge_types,
         gen_houses_dataset_only,
+        path_to_initialization_dataset,
     ):
         super(DGMG, self).__init__()
 
@@ -809,6 +817,7 @@ class DGMG(nn.Module):
             canonical_edge_types=self.graph_prop.canonical_edge_types,
             gen_houses_dataset_only=gen_houses_dataset_only,
         )
+        # Data to finalize
 
         # Actions
         self.add_node_agent = AddNode(
@@ -853,8 +862,17 @@ class DGMG(nn.Module):
 
         return old_step_count
 
+    @property
+    def init_action_step(self):
+        old_step_count = self.init_step_count
+        self.init_step_count += 1
+        # print(f"ACTION STEP #: {old_step_count}")
+
+        return old_step_count
+
     def prepare_for_train(self):
         self.step_count = 0
+        self.init_step_count = 0
 
         self.add_node_agent.prepare_training()
         self.add_edge_agent.prepare_training()
@@ -871,11 +889,11 @@ class DGMG(nn.Module):
 
         return self.add_edge_agent(self.g, a, src_type=src_type)
 
-    def choose_dest_and_update(self, a=None, src_type=None):
+    def choose_dest_and_update(self, a=None, src_type=None, src_id=None):
         """Choose destination and connect it to the latest node.
         Add edges for both directions and update the graph."""
 
-        self.choose_dest_agent(self.g, a, src_type=src_type)
+        self.choose_dest_agent(self.g, a, src_type=src_type, src_id=None)
 
     def get_log_prob(self):
         an_sum = 0
@@ -934,7 +952,7 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, actions=None):
+    def forward(self, init_actions=None, actions=None):
         # The graph we will work on
         self.g = self.partial_graph_agent()
         # self.g = self.g.to('cuda:0')
@@ -942,10 +960,10 @@ class DGMG(nn.Module):
         self.graph_prop.canonical_etypes = [cet for cet in self.g.canonical_etypes]
         # Right now, the nodes do not have 'hv' or 'a' features.
         # Would like to initialize these features for all added nodes in the partial graph
-        # Would like to use the AddNode agent nn's to do this.
+        # We use the AddNode agent nn's to do this.
         self.initialize_partial_graph_node_features()
 
-        # Uncomment to print out partial graph
+        # # Uncomment to print out partial graph
         # for c_et in self.g.canonical_etypes:
         #     if self.g.num_edges(c_et) > 0:
         #         print(f"Edge numbers: {c_et} : {self.g.num_edges(c_et)}")
@@ -956,8 +974,10 @@ class DGMG(nn.Module):
 
         if self.training:
             self.prepare_for_train()
+            self.finalize_partial_graph_train(init_actions)
             return self.forward_train(actions)
         else:
+            self.finalize_partial_graph_inference()
             return self.forward_inference()
 
     def initialize_partial_graph_node_features(self):
@@ -969,9 +989,6 @@ class DGMG(nn.Module):
                 )
                 self.g.nodes[ntype].data["a"] = torch.zeros(
                     (self.g.num_nodes(ntype), 2 * self.node_hidden_size)
-                )
-                self.g.nodes[ntype].data["hf"] = torch.zeros(
-                    (self.g.num_nodes(ntype), self.node_features_size)
                 )
 
                 # Then input smart values
@@ -990,3 +1007,33 @@ class DGMG(nn.Module):
                             dim=1,
                         )
                     )
+
+    def finalize_partial_graph_train(self, init_actions):
+        for ntype in self.g.ntypes:
+            if self.g.num_nodes(ntype) > 0:
+                for node_id in range(self.g.num_nodes(ntype)):
+                    to_add_edge = self.add_edge_or_not(
+                        a=init_actions[self.init_action_step][1:], src_type=ntype
+                    )
+                    while to_add_edge:
+                        self.choose_dest_and_update(
+                            a=init_actions[self.init_action_step][1:],
+                            src_type=ntype,
+                            src_id=node_id,
+                        )
+                        to_add_edge = self.add_edge_or_not(
+                            a=init_actions[self.init_action_step][1:], src_type=ntype
+                        )
+
+    def finalize_partial_graph_inference(self, init_actions):
+        for ntype in self.g.ntypes:
+            if ntype == "exterior_wall":
+                continue
+            if self.g.num_nodes(ntype) > 0:
+                for node_id in range(self.g.num_nodes(ntype)):
+                    num_trials = 0
+                    to_add_edge = self.add_edge_or_not(src_type=ntype)
+                    while to_add_edge and (num_trials < self.g.num_nodes() - 1):
+                        self.choose_dest_and_update(src_type=ntype, src_id=node_id)
+                        num_trials += 1
+                        to_add_edge = self.add_edge_or_not(src_type=ntype)
