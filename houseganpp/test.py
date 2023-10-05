@@ -81,9 +81,9 @@ def main():
     for i, sample in enumerate(fp_loader):
         print("getting here")
         # draw real graph and groundtruth
-        mks, nds, eds, _, _ = sample
-        real_nodes = np.where(nds.detach().cpu()==1)[-1]
-        graph = [nds, eds]
+        mks, nds, eds, _, _, eds_f = sample
+        real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1]
+        graph = [nds, eds, eds_f]
         true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])
         graph_im.save('./{}/graph_{}.png'.format(opt.out, i)) # save graph
 
