@@ -1,5 +1,5 @@
-node_types = ["living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"]
-
+node_types = ['balcony', 'bathroom', 'bedroom', 'closet', 'corridor', 'dining_room', 'exterior_wall', 'kitchen', 'laundry_room', 'living_room', 'missing']
+# e.g: (balcony 0, balcony 1, bathroom 0, bathroom 1, bathroom 2 
 """
 
 Home generation decision list
@@ -18,6 +18,26 @@ decisions : list
         a = {0: "wall with door", 1: "wall without door", 2: "no wall, no door"}
         b = (direction from src to dest is ...): [0, 1,  2, 3,  4, 5,  6, 7,  8] == 
         //                                       [E, NE, N, NW, W, SW, S, SE, undefined] 
+
+"""
+
+"""
+Order nodes by alphabetical name, then id , both in ascending order
+If i want to add an edge from node number 3 to node (bathroom, 2)
+I just do 
+(1, 1, -1) - for node 0
+
+(1, 0, -1) - for node 1
+(2, ("bathroom", 2), [a, b]
+(1, 1, -1)
+
+(1, 1, -1)
+
+(1, 1, -1)
+
+(1, 0, -1)
+(2, ("bathroom", 2), [a, b] 
+(1, 1, -1)
 
 """
 
