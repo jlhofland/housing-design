@@ -141,8 +141,8 @@ def fix_nodes(prev_mks, ind_fixed_nodes):
     )
     ## Set non fixed masks to -1.0
     given_masks[ind_not_fixed_nodes.long()] = -1.0
-    given_masks = given_masks.unsqueeze(1)
-    ## Add channel to indicate given nodes
+    given_masks = given_masks.unsqueeze(1) # Inserts another dimension at position 1
+    ## Add channel to indicate given nodes (these are the "flag" masks in the paper)
     inds_masks = torch.zeros_like(given_masks)
     inds_masks[ind_not_fixed_nodes.long()] = 0.0
     inds_masks[ind_fixed_nodes.long()] = 1.0
