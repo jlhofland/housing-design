@@ -88,8 +88,8 @@ def main():
         graph_im.save('./{}/graph_{}.png'.format(opt.out, i)) # save graph
 
         # add room types incrementally
-        _types = sorted(list(set(real_nodes)))
-        selected_types = [_types[:k+1] for k in range(10)] # [[0], [0,0], [0,0,1], ...]
+        _types = sorted(list(set(real_nodes))) # Set() also removes duplicates. So, it is a sorted list of unique node t
+        selected_types = [_types[:k+1] for k in range(10)] # [[0], [0,1], [0,1,3], ...]. Should it be range(10)? Or len(_types)..
         os.makedirs('./{}/'.format(opt.out), exist_ok=True)
         _round = 0
         
@@ -101,6 +101,8 @@ def main():
         # save_image(im0, './{}/fp_init_{}.png'.format(opt.out, i), nrow=1, normalize=False) # visualize init image
 
         # generate per room type
+        # So, we incrementally generate, fixing further nodes as we go until floorplan finalized.
+        # But I guess during training we don't do this *shrug*. We only fix a random subset and generate / update weights one time.
         for _iter, _types in enumerate(selected_types):
             _fixed_nds = np.concatenate([np.where(real_nodes == _t)[0] for _t in _types]) \
                 if len(_types) > 0 else np.array([]) 
