@@ -669,7 +669,7 @@ def floorplan_collate_fn(batch):
     )
 
 
-""" OUTDATED FUNCTIONS
+# OUTDATED FUNCTIONS
 def reader(filename):
     with open(filename) as f:
         info = json.load(f)
@@ -815,4 +815,4 @@ def __getitem__old(self, index):
         rooms_mks = torch.FloatTensor(rooms_mks)
         rooms_mks = self.transform(rooms_mks)
         return rooms_mks, nodes, edges
-"""
+
