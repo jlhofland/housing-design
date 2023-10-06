@@ -40,13 +40,14 @@ Outputs:
 import torch
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
-original_data_path = 'houseganpp\dataset\housegan_clean_data.npy'
+original_data_path = '/home/evalexii/Documents/IAAIP/datasets/housegan_clean_data.npy'
 new_data_path = 'houseganpp/dataset/HHGPP_train_data.npy'
 
 data = np.load(original_data_path, allow_pickle=True)
 
-
+ROOM_CLASS = {0: "exterior_wall", 1:"living_room", 2:"kitchen", 3:"bedroom", 4:"bathroom", 5:"missing", 6:"closet", 7:"balcony", 8:"corridor", 9:"dining_room", 10:"laundry_room"}
 
 def one_hot_embedding(labels, num_classes=11):
     """Embedding labels to one-hot form.
@@ -121,6 +122,8 @@ def give_edge_width_1(edge):
         x1 = x1 + 1
     if y0 == y1:
         y1 = y1 + 1
+    
+    
     return [x0, y0, x1, y1]
 
 def edge_has_door(bb1, bb2, edges, doorlist):
@@ -138,15 +141,69 @@ def find_angle_EW(bb1, bb2):
     return 9
 
 
+def find_approximate_centroid(room_idx, house_edges, house_edge_adjacencies):
+        # room_idx = data[house_nr][0].index(room_type)
+        room_edge_ids = [id for id, edge in enumerate(house_edge_adjacencies) if room_idx in edge]
+        room_edges = np.array(house_edges)[room_edge_ids]
+        # Weight each edge by it's length
+        weights = np.linalg.norm(room_edges[:,[2,3]] - room_edges[:,[0,1]], axis=1)**1.5
+        # Uncomment below to remove weights
+        # weights = np.ones(len(room_edges))
+        # print(f"weights:\n {weights}")
+        # print(f"roomedges:\n {room_edges}")
+        x = np.concatenate([room_edges[:,0].reshape(-1,1), room_edges[:,2].reshape(-1,1)], axis=1)
+        x_avg = np.mean(x, axis=1).reshape(-1,1)
+        y = np.concatenate([room_edges[:,1].reshape(-1,1), room_edges[:,3].reshape(-1,1)], axis=1)
+        y_avg = np.mean(y, axis=1).reshape(-1,1)
+        room_edge_midpoints = np.concatenate((x_avg, y_avg), axis=1)
+        # print(f"room_edge_midpoints:\n {room_edge_midpoints}")
+        room_x, room_y = np.average(room_edge_midpoints, axis = 0, weights=weights)
+        return room_x, room_y
 
+house_nr = 0
 
-
+def swap(vars):
+    vars = vars.copy()
+    vars[:,[0,1]] = vars[:,[2,3]]
+    return vars
 
 new_data = []
 
 abc=0 # used for restricting amount of homes processed
 
 for home in data:
+
+    # Retrieve house-specific data
+    room_types = np.array(home[0])
+    rooms = np.array(home[1])
+    edges = np.array(home[2])[:,0:4]
+    edge_adjacencies = home[3]
+    doors = np.array(home[4])
+
+    # Plotting
+    fig, ax = plt.subplots()
+    ax.set_title("House with walls, Red ones have doors")
+    for num, edge in enumerate(edges):
+        x = np.array([edge[0], edge[2]])
+        x_avg = np.mean(x)
+        y = np.array([edge[1], edge[3]])
+        y_avg = np.mean(y)
+        if num in doors:
+            ax.plot(x,y, "r")
+            plt.scatter(x_avg, y_avg, c="#FF0000")
+        else:
+            ax.plot(x,y, "b")
+            plt.scatter(x_avg, y_avg, c="#0000FF")
+    for room_idx, room_type in enumerate(room_types):
+        center_x, center_y = find_approximate_centroid(room_idx, edges, edge_adjacencies)
+        plt.text(center_x+4, center_y-3, ROOM_CLASS[room_types[room_idx]])
+        plt.scatter(center_x, center_y, c="#000000")
+    ax.set_aspect('equal')
+    for bb in rooms:
+        x0, y0, x1, y1 = bb
+        height = y1-y0
+        width = x1-x0
+        ax.add_patch(plt.Rectangle((x0,y0), width, height), color="red")
     
     '''
       REMINDER Room nodes have no features [-1,-1]
@@ -173,8 +230,17 @@ for home in data:
         ex_wall_nodes.append([nod[0] + len(nds), edge_length(nod[1]), nod[2]])
         ex_wall_bbs.append(give_edge_width_1(nod[1]))
     ex_wall_nodes = np.array(ex_wall_nodes)
-    ex_wall_bbs = np.array(ex_wall_bbs) / 256 # Bounding boxes of Exterior Walls values scaled between 0 and 1
+    ex_wall_bbs = np.array(ex_wall_bbs) # Bounding boxes of Exterior Walls values scaled between 0 and 1
 
+    '''
+    Plot EW bboxes
+    '''
+    for ew_bb in ex_wall_bbs:
+        x0, y0, x1, y1 = ew_bb
+        height = y1-y0
+        width = x1-x0
+        ax.add_patch(plt.Rectangle((x0,y0), width, height))
+    plt.show()  
 
     ew_nds = one_hot_embedding([0 for i in exterior_walls]) # Create nodes of type 0 for Exterior Walls
     ew_nds = torch.FloatTensor(ew_nds)
@@ -190,7 +256,7 @@ for home in data:
     triples = []
     for k in range(len(nds)):     # From each node
         for l in range(len(nds)): # To each node
-            if l > k:               # Each node pair only once (undirected)
+            # if l > k:               # Each node pair only once (undirected)
                 node0, bb0 = nds[k], bbs[k]
                 node1, bb1 = nds[l], bbs[l]
                 if is_adjacent(bb0, bb1):
@@ -278,12 +344,12 @@ for home in data:
     
 
     abc = abc + 1
-    if abc == 3: # amount of rooms we want in the list
+    if abc == 1: # amount of rooms we want in the list
         break
 
 
 
-print(new_data)
+# print(new_data)
 
 # Finally, save the list:
 
