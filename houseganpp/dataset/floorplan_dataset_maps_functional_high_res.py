@@ -79,7 +79,7 @@ class FloorplanGraphDataset_RP(Dataset):
             a = []
             h = h + 1
             if split == "train":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -94,7 +94,7 @@ class FloorplanGraphDataset_RP(Dataset):
                             self.subgraphs.append(a)
                 self.augment = True
             elif split == "eval":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -109,7 +109,7 @@ class FloorplanGraphDataset_RP(Dataset):
                             self.subgraphs.append(a)
                 self.augment = False
             elif split == "test":
-                if h % 1 == 0:
+                if h % 1 == 0:  # Always true
                     with open(line) as f2:
                         rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(
                             line
@@ -669,7 +669,7 @@ def floorplan_collate_fn(batch):
     )
 
 
-""" OUTDATED FUNCTIONS
+# OUTDATED FUNCTIONS
 def reader(filename):
     with open(filename) as f:
         info = json.load(f)
@@ -815,4 +815,4 @@ def __getitem__old(self, index):
         rooms_mks = torch.FloatTensor(rooms_mks)
         rooms_mks = self.transform(rooms_mks)
         return rooms_mks, nodes, edges
-"""
+
