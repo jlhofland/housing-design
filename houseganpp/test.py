@@ -65,14 +65,14 @@ Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTen
 def _infer(graph, model, prev_state=None):
     
     # configure input to the network
-    z, given_masks_in, given_nds, given_eds = _init_input(graph, prev_state)
+    z, given_masks_in, given_nds, given_eds, given_eds_f = _init_input(graph, prev_state)
     # run inference model
     with torch.no_grad():
         if torch.cuda.is_available():
-            masks = model(z.to('cuda'), given_masks_in.to('cuda'), given_nds.to('cuda'), given_eds.to('cuda'))
+            masks = model(z.to('cuda'), given_masks_in.to('cuda'), given_nds.to('cuda'), given_eds.to('cuda'), given_eds_f.to('cuda'))
             print(len(masks))
         else:
-            masks = model(z, given_masks_in, given_nds, given_eds)
+            masks = model(z, given_masks_in, given_nds, given_eds, given_eds_f)
         masks = masks.detach().cpu().numpy()
     return masks
 
@@ -82,14 +82,14 @@ def main():
         print("getting here")
         # draw real graph and groundtruth
         mks, nds, eds, _, _, eds_f = sample
-        room_types = np.where(nds[:,:-2].detach().cpu()==1)[-1]
+        real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] # Add the [:,:-2] to cut off the node features and leave the node types
         graph = [nds, eds, eds_f]
         true_graph_obj, graph_im = draw_graph([room_types, eds.detach().cpu().numpy()])
         graph_im.save('./{}/graph_{}.png'.format(opt.out, i)) # save graph
 
         # add room types incrementally
-        _types = sorted(list(set(room_types)))
-        selected_types = [_types[:k+1] for k in range(10)]
+        _types = sorted(list(set(real_nodes)))
+        selected_types = [_types[:k+1] for k in range(10)] # [[0], [0,0], [0,0,1], ...]
         os.makedirs('./{}/'.format(opt.out), exist_ok=True)
         _round = 0
         
