@@ -25,10 +25,10 @@ Outputs:
   
   A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
-      [CHECK] "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
-      [CHECK] "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
-      [CHECK] "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
-      [TODO]  "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
+      "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
+      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
+      "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
+      "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
       Note that N == number of graph nodes, and E == number of graph edges
 
@@ -36,11 +36,13 @@ Outputs:
   [ [],[],[],[],[] ],
  ...]
 """
-
+import math
+import pickle
 import torch
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+
 
 original_data_path = 'houseganpp/dataset/housegan_clean_data.npy'
 new_data_path = 'houseganpp/dataset/HHGPP_train_data.npy'
@@ -189,37 +191,23 @@ def relative_direction(bb1, bb2):
         
     return direction
 
-def find_angle_EW(bbA, bbB):
-    ''' TODO DOES NOT RETURN CORRECT ANGLE '''
-    # Gives angle between EW1 and EW2
+def find_angle_EW(EW1, EW2):
+    ''' Get the angles between the EW '''
+
+    edges = np.array(home[2])[:,0:4]
+    doors = np.array(home[4])
+    rooms_connected = np.array(home[3], dtype=object)
+    EW_angles = get_connection_corners(edges, rooms_connected)
     angle = 0
-    xa0, ya0, xa1, ya1 = bbA * 256
-    xb0, yb0, xb1, yb1 = bbB * 256
-
-    # Remove 1 pixel wide wall again to get a line
-    if xa1 - xa0 == 1:
-        xa1 = xa0
-    if ya1 - ya0 == 1:
-        ya1 = ya0
-    if xb1 - xb0 == 1:
-        xb1 = xb0
-    if yb1 - yb0 == 1:
-        yb1 = yb0
+    # Go twice through the list (also backwards)
+    for EW_angle in EW_angles:
+        if EW1 == EW_angle[1] and EW2 == EW_angle[3]:
+            angle = EW_angle[4]
+        if EW1 == EW_angle[3] and EW2 == EW_angle[1]: #backwards
+            angle = EW_angle[4] + 180
+            if angle > 180:
+                angle = angle - 360
     
-    dxa = xa1 - xa0
-    dya = ya1 - ya0
-    dxb = xb1 - xb0
-    dyb = yb1 - yb0
-
-    angleA = np.degrees(np.arctan2(dya, dxa))
-    angleB = np.degrees(np.arctan2(dyb, dxb))
-    angle = angleA - angleB
-
-    if angle < -179:
-        angle = angle + 360
-    if angle > 180:
-        angle = angle - 360
-
     return angle
 
 def find_approximate_centroid(room_idx, house_edges, house_edge_adjacencies):
@@ -247,6 +235,98 @@ def swap(vars):
     vars = vars.copy()
     vars[:,[0,1]] = vars[:,[2,3]]
     return vars
+
+def get_exterior_walls(rooms_connected, edges, doors):
+    indices = [i for i, item in enumerate(rooms_connected) if len(item) == 1]
+    exterior_walls = [(i,list(edges[i]),1) if i in doors else (i,list(edges[i]),0) for i in indices]
+    return exterior_walls
+
+def calculate_angle(prev_source, prev_dest, source, dest):
+    prev_vector = (prev_dest[0] - prev_source[0], prev_dest[1] - prev_source[1])
+    vector = (dest[0] - source[0], dest[1] - source[1])
+    angle_radians = np.arctan2(vector[1], vector[0]) - np.arctan2(prev_vector[1], prev_vector[0])
+    angle_degrees = np.degrees(angle_radians)
+    if (angle_degrees > 180):
+      angle_degrees = angle_degrees - 360
+    if (angle_degrees < -180):
+      angle_degrees = angle_degrees + 360
+    return angle_degrees
+
+def calculate_centroid(points):
+    x_sum = sum(point[0] for point in points)
+    y_sum = sum(point[1] for point in points)
+    centroid_x = x_sum / len(points)
+    centroid_y = y_sum / len(points)
+    return (centroid_x, centroid_y)
+
+def get_next_corner(exterior_wall_coord, corners, corner_points):
+    if corner_points.index((exterior_wall_coord[0], exterior_wall_coord[1])) < corner_points.index((exterior_wall_coord[2], exterior_wall_coord[3])):
+      return  ((exterior_wall_coord[0], exterior_wall_coord[1]),(exterior_wall_coord[2], exterior_wall_coord[3]))
+    else:
+      return ((exterior_wall_coord[2], exterior_wall_coord[3]),(exterior_wall_coord[0], exterior_wall_coord[1]))
+
+def get_connection_corners(edges, rooms_connected):
+    corners = []
+    doors = np.array(home[4])
+    exterior_walls = get_exterior_walls(rooms_connected, edges, doors)
+
+    #I first have to find all the corners to be able to calculate the centroid, so I can make sure I go in a clockwise direction in the polygon
+    for i in range(len(exterior_walls) - 1):
+      x_i0, y_i0 = exterior_walls[i][1][0], exterior_walls[i][1][1]
+      x_i1, y_i1 = exterior_walls[i][1][2], exterior_walls[i][1][3]
+
+      for j in range(i + 1, len(exterior_walls)):
+        x_j0, y_j0 = exterior_walls[j][1][0], exterior_walls[j][1][1]
+        x_j1, y_j1 = exterior_walls[j][1][2], exterior_walls[j][1][3]
+
+        if x_i0 == x_j0 and y_i0 == y_j0:
+          corners.append((exterior_walls[i], exterior_walls[j], (x_i0, y_i0)))
+        elif x_i0 == x_j1 and y_i0 == y_j1:
+          corners.append((exterior_walls[i], exterior_walls[j], (x_i0, y_i0)))
+        elif x_i1 == x_j0 and y_i1 == y_j0:
+          corners.append((exterior_walls[i], exterior_walls[j], (x_i1, y_i1)))
+        elif x_i1 == x_j1 and y_i1 == y_j1:
+          corners.append((exterior_walls[i], exterior_walls[j], (x_i1, y_i1)))
+
+
+
+    #[x0, y0, x1, y1]
+    #np.arctan2(y,x) so I MUST SWITCH THE INPUT
+    corner_points = [corners[i][2] for i in range(len(corners))]
+    centroid = calculate_centroid(corner_points)
+    corners = sorted(corners, key = lambda x: (math.atan2((x[2][1]-centroid[1]),(x[2][0]-centroid[0])) + 2 * np.pi) % (2 * np.pi), reverse=True)
+    sorted_corner_points = [corners[i][2] for i in range(len(corners))]
+
+
+    # for i in range(len(exterior_walls)):
+    #   source, dest = get_next_corner(exterior_walls[i][1], corners, sorted_corner_points)
+    #   print(exterior_walls[i][1])
+    #   print(source, dest)
+
+    connection_corners = []
+    source, dest = get_next_corner(exterior_walls[0][1], corners, sorted_corner_points)
+    initial_source, initial_dest = source, dest
+    initial_wall = exterior_walls[0]
+    previous_wall = exterior_walls.pop(0)
+    while(len(exterior_walls) != 0):
+        for i, exterior_wall in enumerate(exterior_walls):
+            if np.array_equal(exterior_wall[1][0:2], dest):
+              connection_corners.append([0, previous_wall[0], 0, exterior_wall[0], calculate_angle(source, dest, exterior_wall[1][0:2], exterior_wall[1][2:4]), 0])
+              dest = exterior_wall[1][2:4]
+              previous_wall = exterior_walls.pop(i)
+              source = exterior_wall[1][0:2]
+            elif np.array_equal(exterior_wall[1][2:4], dest):
+              connection_corners.append([0, previous_wall[0], 0, exterior_wall[0], calculate_angle(source, dest, exterior_wall[1][2:4], exterior_wall[1][0:2]), 0])
+              dest = exterior_wall[1][0:2]
+              previous_wall = exterior_walls.pop(i)
+              source = exterior_wall[1][2:4]
+    connection_corners.append([0, previous_wall[0], 0, initial_wall[0], calculate_angle(source, dest, initial_source, initial_dest), 0])
+    # print(*connection_corners, sep="\n")
+    return connection_corners
+
+
+
+
 
 new_data = []
 
@@ -322,11 +402,9 @@ for home in data[1:]:
     ew_nds = torch.FloatTensor(ew_nds)
     ew_nds = torch.cat((ew_nds, torch.FloatTensor(ex_wall_nodes[:,1:])), 1) # Add EW node features to list
 
-    nds = torch.cat((nds, ew_nds), 0) # Add room nodes and Exterior Wall nodes to the same nds node list
-    
+    nds = torch.cat((nds, ew_nds), 0) # Add room nodes and Exterior Wall nodes to the same nds node list   
 
     bbs = np.concatenate((bbs, ex_wall_bbs), 0) # Add bounding boxes of EW to bounding boxes list
-
 
     # Creating the edges (Ex3), [src_node_id, +1/-1, dest_node_id]
     triples = []
@@ -372,15 +450,18 @@ for home in data[1:]:
     For each edge [from, connected, to], if from or to is a room: edge type is RA (1) with door feature (0/1) and relative direction (E/NE/N/NW/W/SW/S/SE/Undefined)=(0/1/2/3/4/5/6/7/8)
                                     if from and to are Exterior Wall: edge type is CE (0) with angle feature in degrees and 0.
     '''
+
+    
     i=0
     for edge in eds:
         if edge[0] not in range(len(rooms)) and edge[2] not in range(len(rooms)):  # Connection between two EW
             edges_f[i][0] = 0 # Edge type is CE
-            edges_f[i][1] = find_angle_EW(bbs[edge[0]], bbs[edge[2]])
+
+            edges_f[i][1] = find_angle_EW(edge[0], edge[2]) 
 
         else: # Connection is RA
             edges_f[i][0] = 1
-            edges_f[i][2] = relative_direction(bbs[edge[0]], bbs[edge[2]]) # Find relative direction of node 1 to node 2 ################################################ Might need to me 8 for non adjacency of nodes
+            edges_f[i][2] = relative_direction(bbs[edge[0]], bbs[edge[2]]) # Find relative direction of node 1 to node 2
 
             if edge[0] in range(len(rooms)) and  edge[2] in range(len(rooms)): # If both nodes are rooms
                 if edge[1] == 1:
@@ -389,6 +470,9 @@ for home in data[1:]:
         i = i + 1  
 
     edges_f = np.array(edges_f)
+
+
+
 
 
 
@@ -401,22 +485,17 @@ for home in data[1:]:
     #     x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
     #     rooms_mks[k, x0:x1+1, y0:y1+1] = 1.0
     # rooms_mks = torch.FloatTensor(rooms_mks)
+
+    print(nds)    
+    print(bbs)
+    print(eds)
+    print(edges_f)
     
-    
-    print('home = ')
-    print(home)
-    # print('nodes = ')
-    # print(nds)
-    # print('bounding boxes = ')
-    # print(bbs)
-    # print('room masks = ')
-    # print(rooms_mks)
-    # print('edges = ')
-    # print(eds)
-    # print('edge features = ')
-    # print(edges_f)
-    
-    
+    nds = nds.tolist()
+    bbs = bbs.tolist()
+    eds = eds.tolist()
+    edges_f = edges_f.tolist()
+
     new_data.append([nds, bbs, eds, edges_f])
 
     abc = abc + 1
@@ -424,12 +503,9 @@ for home in data[1:]:
         break
 
 
-
-print(new_data)
-
+# print(new_data)
 # Finally, save the list:
 
-# np.save(new_data_path, new_data)
-# #######################################
-# Gives an error because the lists nds, bbs, eds and edges_f are not the same shape. Can not be put into an np.array. Perhaps try in CSV format?...
-# #######################################
+with open(new_data_path, 'wb') as f:
+  pickle.dump(new_data,f)
+
