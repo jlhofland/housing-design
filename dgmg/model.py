@@ -573,7 +573,6 @@ class ChooseDestAndUpdate(nn.Module):
 class apply_partial_graph_input_completion(nn.Module):
     def __init__(
         self,
-        file_path,
         node_hidden_size,
         room_types,
         canonical_edge_types,
@@ -581,7 +580,7 @@ class apply_partial_graph_input_completion(nn.Module):
     ):
         super(apply_partial_graph_input_completion, self).__init__()
 
-        self.file_path = file_path
+        self.file_Path = None
         self.node_hidden_size = node_hidden_size
         self.room_types = room_types
         self.canonical_edge_types = canonical_edge_types
@@ -636,15 +635,16 @@ class apply_partial_graph_input_completion(nn.Module):
     def finish_off_partial_graph(self):
         pass
 
-    def forward(self):
+    def forward(self, file_path):
         # Retrieve input data
+        self.file_path = file_path
         (
             _,
             exterior_walls_sequence,
             connections_corners_sequence,
             connections_rooms_sequence,
             corner_type_edge_features,
-        ) = parse_input_json(file_path=self.file_path)
+        ) = parse_input_json(file_path)
 
         # Extract wall features
         exterior_walls_input_size = exterior_walls_sequence[0].size()[0]
@@ -776,7 +776,6 @@ class DGMG(nn.Module):
         room_types,
         edge_types,
         gen_houses_dataset_only,
-        path_to_initialization_dataset,
     ):
         super(DGMG, self).__init__()
 
@@ -795,7 +794,7 @@ class DGMG(nn.Module):
         #     self.room_type_dict[et] = idx
 
         # Graph conditioning vector
-        self.conditioning_vector = ConditionVec("input.json").conditioning_vector
+        self.conditioning_vector = None
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -811,7 +810,6 @@ class DGMG(nn.Module):
 
         # Graph initialization
         self.partial_graph_agent = apply_partial_graph_input_completion(
-            file_path=os.getcwd() + "/input.json",
             node_hidden_size=self.node_hidden_size,
             room_types=self.room_types,
             canonical_edge_types=self.graph_prop.canonical_edge_types,
@@ -910,6 +908,9 @@ class DGMG(nn.Module):
             cd_sum = torch.cat(self.choose_dest_agent.log_prob).sum()
         return an_sum + ae_sum + cd_sum
 
+    def init_cond_vector(self, file_path):
+        return ConditionVec(file_name=file_path).conditioning_vector
+
     def forward_train(self, actions):
         # Again, "actions" = "decision sequence"
         # In order to have node/edge types and node/edge features,
@@ -952,9 +953,12 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, init_actions=None, actions=None):
-        # The graph we will work on
-        self.g = self.partial_graph_agent()
+    def forward(self, user_input_path=None, init_actions=None, actions=None):
+        if user_input_path:
+            # The graph we will work on
+            self.g = self.partial_graph_agent(user_input_path)
+            # Our conditioning vector, specific to the user input file
+            self.conditioning_vector = self.init_cond_vector(user_input_path)
         # self.g = self.g.to('cuda:0')
         # Add a list of canonical_etypes for use by Graph prop...
         self.graph_prop.canonical_etypes = [cet for cet in self.g.canonical_etypes]
@@ -1025,7 +1029,7 @@ class DGMG(nn.Module):
                             a=init_actions[self.init_action_step][1:], src_type=ntype
                         )
 
-    def finalize_partial_graph_inference(self, init_actions):
+    def finalize_partial_graph_inference(self):
         for ntype in self.g.ntypes:
             if ntype == "exterior_wall":
                 continue
