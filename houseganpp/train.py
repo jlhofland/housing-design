@@ -48,7 +48,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=200, help="interval between image sampling"
+    "--sample_interval", type=int, default=10, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -157,8 +157,10 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
     return
 
 
-# Configure data loader
-fp_dataset_train = FloorplanGraphDataset(
+# Configure data loaderIt seems pretty unexpected that, when the xla_gpu_deterministic_ops flag is set to true, calling scatter_add with vmap with a batch-size of 100 makes the runtime 377x longer, i.e. 3.7 times slower than just using a manual python for-loop.
+
+Unrelatedly, although the slow-down of scatter_add is to be expected when enforcing determinism, it is rather severe (almost 2000x slower without vmap, and over 200000x slower with vmap).
+I guess this operation doesn't come up very regularly, but it appears, for example, in the backward pass through a bilinear interpolation of an image (e.g. when using jax.scipy.ndimage.map_coordinates). Even if the vmap issue gets resolved, it would be absolutely fantastic if, in
     opt.data_path,
     transforms.Normalize(mean=[0.5], std=[0.5]),
     target_set=opt.target_set,

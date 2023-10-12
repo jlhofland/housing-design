@@ -241,6 +241,19 @@ class HouseDataset(Dataset):
         return batch
 
 
+class UserInputDataset(Dataset):
+    def __init__(self, fname):
+        super(UserInputDataset, self).__init__()
+
+        with open(fname, "rb") as f:
+            self.dataset = pickle.load(f)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        return self.dataset[index]
+
 class HouseModelEvaluation(object):
     # Generates new graphs, makes simple graph-validity checks, keeps track of these metrics, and plots groups of four graphs
 
@@ -283,7 +296,7 @@ class HouseModelEvaluation(object):
 
         return labels, colors
 
-    def rollout_and_examine(self, model, num_samples):
+    def rollout_and_examine(self, user_input_path, model, num_samples):
         assert not model.training, "You need to call model.eval()."
 
         num_total_size = 0
@@ -302,7 +315,7 @@ class HouseModelEvaluation(object):
         }
 
         for i in range(num_samples):
-            sampled_graph = model()
+            sampled_graph = model(user_input_path=user_input_path)
             if isinstance(sampled_graph, list):
                 # When the model is a batched implementation, a list of
                 # DGLGraph objects is returned. Note that with model(),
