@@ -4,17 +4,11 @@ and will be loaded when setting up."""
 
 
 def dataset_based_configure(opts):
-    if opts["dataset"] == "cycles":
-        raise ValueError("Cycles dataset no longer supported")
-    elif opts["dataset"] == "houses":
-        ds_configure = houses_configure
-    else:
-        raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
-
+    ds_configure = houses_configure
+    
     opts = {**opts, **ds_configure}
 
     return opts
-
 
 synthetic_dataset_configure = {
     "node_hidden_size": 16,
@@ -23,15 +17,6 @@ synthetic_dataset_configure = {
     "nepochs": 10, #25
     "ds_size": 100,#0,
     "num_generated_samples": 20,#00,
-}
-
-cycles_configure = {
-    **synthetic_dataset_configure,
-    **{
-        "min_size": 10,
-        "max_size": 20,
-        "lr": 5e-4,
-    },
 }
 
 houses_configure = {

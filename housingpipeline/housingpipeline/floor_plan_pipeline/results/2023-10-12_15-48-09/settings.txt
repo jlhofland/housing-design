@@ -1,0 +1,9 @@
+seed	390
+log_dir	./results/2023-10-12_15-48-09
+min_size	3
+max_size	30
+lr	0.0005
+node_features_size	0
+num_edge_feature_classes_list	[9, 9]
+room_types	['exterior_wall', 'living_room', 'kitchen', 'bedroom', 'bathroom', 'missing', 'closet', 'balcony', 'corridor', 'dining_room', 'laundry_room']
+edge_types	['corner_edge', 'room_adjacency_edge']
