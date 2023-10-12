@@ -41,9 +41,9 @@ def main(opts):
         if opts["dataset"] == "cycles":
             raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
-            from houses import HouseDataset, HouseModelEvaluation, HousePrinting
+            from houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
 
-            dataset = torch.utils.data.TensorDataset(HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
+            dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -96,12 +96,12 @@ def main(opts):
                     "#######################\nBegin Training\n#######################"
                 )
                 print(f"Beginning batch {batch_number}")
-                for i, (init_data, data) in enumerate(data_loader):
+                for i, (user_input_path, init_data, data) in enumerate(data_loader):
                     # here, the "actions" refer to the cycle decision sequences
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    log_prob = model(init_actions=init_data, actions=data)
+                    log_prob = model(user_input_path=user_input_path, init_actions=init_data, actions=data)
                     prob = log_prob.detach().exp()
 
                     loss_averaged = -log_prob / opts["batch_size"]
@@ -143,7 +143,7 @@ def main(opts):
         print(
             "#######################\nTraining complete, begin evaluation\n#######################"
         )
-        evaluator.rollout_and_examine(model, opts["num_generated_samples"])
+        evaluator.rollout_and_examine(opts["path_to_user_input_file_inference"], model, opts["num_generated_samples"])
         evaluator.write_summary()
 
         t4 = time.time()
@@ -197,7 +197,7 @@ def main(opts):
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        evaluator.rollout_and_examine(model, opts["num_generated_samples"])
+        evaluator.rollout_and_examine(opts["path_to_user_input_file_inference"], model, opts["num_generated_samples"])
         evaluator.write_summary()
         t2 = time.time()
         print(
@@ -224,16 +224,22 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="houses_dataset.p",
-        help="load the dataset if it exists, "
-        "generate it and save to the path otherwise",
+        default="training_datasets/houses_dataset.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="houses_initialization_dataset.p",
-        help="load the dataset if it exists, "
-        "generate it and save to the path otherwise",
+        default="training_datasets/houses_initialization_dataset.p",
+    )
+    parser.add_argument(
+        "--path-to-ui-dataset",
+        type=str,
+        default="training_datasets/user_input_datasets/",
+    )
+    parser.add_argument(
+        "--path-to-user-input-file-inference",
+        type=str,
+        default="input.json",
     )
 
     # train first, or just eval
