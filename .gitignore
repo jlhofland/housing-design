@@ -7,3 +7,4 @@ housingpipeline/housingpipeline/dgmg/results/*
 housingpipeline/housingpipeline/housegan_clean_data.npy
 *.vscode*
 housingpipeline/housingpipeline/houseganpp/HGPP/*
+results/
