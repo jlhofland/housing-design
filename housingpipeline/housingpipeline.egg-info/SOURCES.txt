@@ -1,0 +1,6 @@
+setup.py
+housingpipeline/__init__.py
+housingpipeline.egg-info/PKG-INFO
+housingpipeline.egg-info/SOURCES.txt
+housingpipeline.egg-info/dependency_links.txt
+housingpipeline.egg-info/top_level.txt

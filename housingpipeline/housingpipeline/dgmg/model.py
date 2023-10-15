@@ -1,6 +1,6 @@
 from functools import partial
-from utils import parse_input_json, tensor_to_one_hot
-from houses import HouseDataset, generate_home_dataset
+from housingpipeline.dgmg.utils import parse_input_json, tensor_to_one_hot
+from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset
 
 import os
 import dgl
@@ -35,7 +35,7 @@ class ConditionVec(nn.Module):
             connections_corners,
             connections_rooms,
             corner_type_edge_features,
-        ) = parse_input_json(os.getcwd() + "/" + file_name)
+        ) = parse_input_json(file_name)
 
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
@@ -776,6 +776,7 @@ class DGMG(nn.Module):
         room_types,
         edge_types,
         gen_houses_dataset_only,
+        user_input_path,
     ):
         super(DGMG, self).__init__()
 
@@ -786,6 +787,7 @@ class DGMG(nn.Module):
         self.v_max = v_max
         self.room_types = room_types
         self.edge_types = edge_types
+        self.user_input_path=user_input_path
         # self.room_type_dict = {}
         # self.room_type_dict = {}
         # for idx, rt in enumerate(room_types):
@@ -794,7 +796,7 @@ class DGMG(nn.Module):
         #     self.room_type_dict[et] = idx
 
         # Graph conditioning vector
-        self.conditioning_vector = None
+        self.conditioning_vector = self.init_cond_vector(self.user_input_path)
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -842,7 +844,7 @@ class DGMG(nn.Module):
         self.init_weights()
 
     def init_weights(self):
-        from utils import dgmg_message_weight_init, weights_init
+        from .utils import dgmg_message_weight_init, weights_init
 
         self.graph_embed.apply(weights_init)
         self.graph_prop.apply(weights_init)
@@ -953,15 +955,13 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, user_input_path=None, init_actions=None, actions=None):
-        if user_input_path:
-            # The graph we will work on
-            self.g = self.partial_graph_agent(user_input_path)
-            # Our conditioning vector, specific to the user input file
-            self.conditioning_vector = self.init_cond_vector(user_input_path)
-        # self.g = self.g.to('cuda:0')
+    def forward(self, init_actions=None, actions=None):
+        # The graph we will work on
+        self.g = self.partial_graph_agent(self.user_input_path)
+        
         # Add a list of canonical_etypes for use by Graph prop...
         self.graph_prop.canonical_etypes = [cet for cet in self.g.canonical_etypes]
+        
         # Right now, the nodes do not have 'hv' or 'a' features.
         # Would like to initialize these features for all added nodes in the partial graph
         # We use the AddNode agent nn's to do this.

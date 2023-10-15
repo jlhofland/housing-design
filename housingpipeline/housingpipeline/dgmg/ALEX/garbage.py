@@ -5,18 +5,36 @@ import dgl
 import numpy as np
 import torch
 import torch.nn as nn
+import sys
 
-g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/dgmg/results/2023-09-27_16-56-24/graphs/g0.bin")[0][0]
+sys.path.append("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
 
-for cet in g.canonical_etypes:
-    if(g.num_edges(cet)>0):
-        print(cet)
-nodes = []
-for nt in g.ntypes:
-    if g.num_nodes(nt)>0:
-        print(f"NT: {nt}, num: {g.num_nodes(nt)}")
-        num_nt
-        nodes.append(*range(g.num(nodes(nt))))
+
+model = torch.load("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/model.pth")
+
+# Print model's state_dict
+print("Model's state_dict:")
+for param_tensor in model.state_dict():
+    print(param_tensor, "\t", model.state_dict()[param_tensor].size())
+
+torch.save(model.state_dict(), "dgmg_state_dict.pth")
+
+from housingpipeline.dgmg.model import DGMG
+
+# model = DGMG()
+a=torch.load_state_dict("./dgmg_state_dict.pth")
+
+# g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/dgmg/results/2023-09-27_16-56-24/graphs/g0.bin")[0][0]
+
+# for cet in g.canonical_etypes:
+#     if(g.num_edges(cet)>0):
+#         print(cet)
+# nodes = []
+# for nt in g.ntypes:
+#     if g.num_nodes(nt)>0:
+#         print(f"NT: {nt}, num: {g.num_nodes(nt)}")
+#         num_nt
+#         nodes.append(*range(g.num(nodes(nt))))
     
 
 # a = torch.torch.tensor([[1,2,3],[4,5,6],[7,8,9]])

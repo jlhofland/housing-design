@@ -58,7 +58,8 @@ def check_house(g):
             if not total_out_degrees >= 2:
                 print("One or more Rooms do not connect to minimum 2 other rooms")
                 return False
-
+    
+    print("House is valid.")
     return True
 
 
@@ -296,6 +297,15 @@ class HouseModelEvaluation(object):
 
         return labels, colors
 
+    def generate_single_valid_graph(self, user_input_path, model):
+        assert not model.training, "You need to call model.eval()."
+        found_one = False
+        while not found_one:
+            sampled_graph = model()
+            found_one = check_house(sampled_graph)
+        return sampled_graph
+
+    
     def rollout_and_examine(self, user_input_path, model, num_samples):
         assert not model.training, "You need to call model.eval()."
 

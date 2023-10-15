@@ -4,7 +4,7 @@ import numpy as np
 import math
 import json
 
-from dataset.floorplan_dataset_maps_functional_high_res import (
+from housingpipeline.houseganpp.dataset.floorplan_dataset_maps_functional_high_res import (
     FloorplanGraphDataset,
     floorplan_collate_fn,
 )
@@ -18,8 +18,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from PIL import Image, ImageDraw, ImageOps
-from misc.utils import combine_images, _init_input, selectRandomNodes, selectNodesTypes
-from models.models import Discriminator, Generator, compute_gradient_penalty
+from housingpipeline.houseganpp.misc.utils import combine_images, _init_input, selectRandomNodes, selectNodesTypes
+from housingpipeline.houseganpp.models.models import Discriminator, Generator, compute_gradient_penalty
 
 
 parser = argparse.ArgumentParser()
@@ -157,10 +157,8 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
     return
 
 
-# Configure data loaderIt seems pretty unexpected that, when the xla_gpu_deterministic_ops flag is set to true, calling scatter_add with vmap with a batch-size of 100 makes the runtime 377x longer, i.e. 3.7 times slower than just using a manual python for-loop.
-
-Unrelatedly, although the slow-down of scatter_add is to be expected when enforcing determinism, it is rather severe (almost 2000x slower without vmap, and over 200000x slower with vmap).
-I guess this operation doesn't come up very regularly, but it appears, for example, in the backward pass through a bilinear interpolation of an image (e.g. when using jax.scipy.ndimage.map_coordinates). Even if the vmap issue gets resolved, it would be absolutely fantastic if, in
+# Configure data loader
+fp_dataset_train = FloorplanGraphDataset(
     opt.data_path,
     transforms.Normalize(mean=[0.5], std=[0.5]),
     target_set=opt.target_set,

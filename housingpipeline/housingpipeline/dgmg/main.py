@@ -21,21 +21,7 @@ def main(opts):
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
 
-        # Initialize_model
-        model = DGMG(
-            v_max=opts["max_size"],
-            node_hidden_size=opts["node_hidden_size"],
-            num_prop_rounds=opts["num_propagation_rounds"],
-            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-            # zero for now, no node features
-            node_features_size=opts["node_features_size"],
-            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
-            room_types=opts["room_types"],
-            edge_types=opts["edge_types"],
-            gen_houses_dataset_only=opts["gen_data"],
-        )
-        if opts["gen_data"]:
-            model()
+
 
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
@@ -101,7 +87,24 @@ def main(opts):
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    log_prob = model(user_input_path=user_input_path, init_actions=init_data, actions=data)
+                    # Initialize_model
+                    model = DGMG(
+                        v_max=opts["max_size"],
+                        node_hidden_size=opts["node_hidden_size"],
+                        num_prop_rounds=opts["num_propagation_rounds"],
+                        # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
+                        # zero for now, no node features
+                        node_features_size=opts["node_features_size"],
+                        num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+                        room_types=opts["room_types"],
+                        edge_types=opts["edge_types"],
+                        gen_houses_dataset_only=opts["gen_data"],
+                        user_input_path=user_input_path, 
+                    )
+                    if opts["gen_data"]:
+                        model()
+
+                    log_prob = model(init_actions=init_data, actions=data)
                     prob = log_prob.detach().exp()
 
                     loss_averaged = -log_prob / opts["batch_size"]
