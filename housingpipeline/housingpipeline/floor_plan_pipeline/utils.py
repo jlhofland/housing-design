@@ -75,7 +75,7 @@ def setup(args):
     torch.manual_seed(opts["seed"])
 
     # Dataset
-    from configure import dataset_based_configure
+    from housingpipeline.floor_plan_pipeline.configure import dataset_based_configure
     opts = dataset_based_configure(opts)
 
     # Log

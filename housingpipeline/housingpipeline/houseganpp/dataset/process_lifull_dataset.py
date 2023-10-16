@@ -25,8 +25,8 @@ Outputs:
   
   A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
-      "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
       "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
+      "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
       "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
       "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
@@ -485,18 +485,18 @@ for home in data[1:]:
     #     x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
     #     rooms_mks[k, x0:x1+1, y0:y1+1] = 1.0
     # rooms_mks = torch.FloatTensor(rooms_mks)
-
-    print(nds)    
+    
     print(bbs)
+    print(nds)
     print(eds)
     print(edges_f)
     
-    nds = nds.tolist()
     bbs = bbs.tolist()
+    nds = nds.tolist()
     eds = eds.tolist()
     edges_f = edges_f.tolist()
 
-    new_data.append([nds, bbs, eds, edges_f])
+    new_data.append([bbs, nds, eds, edges_f])
 
     abc = abc + 1
     if abc == 1: # amount of rooms we want in the list

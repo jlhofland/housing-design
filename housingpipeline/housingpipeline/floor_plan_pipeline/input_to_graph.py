@@ -66,7 +66,7 @@ def define_opts():
     )
 
     args = parser.parse_args()
-    from utils import setup
+    from housingpipeline.floor_plan_pipeline.utils import setup
 
     dgmg_opts = setup(args)
 

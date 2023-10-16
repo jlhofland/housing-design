@@ -10,11 +10,11 @@ import time
 import os
 
 import torch
-from model import DGMG
+from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from utils import Printer
+from housingpipeline.dgmg.utils import Printer
 
 
 def main(opts):
@@ -27,7 +27,7 @@ def main(opts):
         if opts["dataset"] == "cycles":
             raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
-            from houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
+            from housingpipeline.dgmg.houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
 
             dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
             evaluator = HouseModelEvaluation(
