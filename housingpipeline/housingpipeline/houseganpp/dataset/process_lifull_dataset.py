@@ -25,8 +25,8 @@ Outputs:
   
   A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
+      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction). All values are scaled between 0 and 1 by dividing by 256
       "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
-      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
       "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
       "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
@@ -383,7 +383,7 @@ for home in data:
     for bb in range(len(bbs)):
         bbs[bb] = give_edge_width_1(bbs[bb])
 
-    new_data.append([nds, bbs, eds, edges_f])
+    new_data.append([bbs, nds, eds, edges_f])
 
     nr_homes = nr_homes + 1
     print(f'{nr_homes} out of {home_data_length}')
