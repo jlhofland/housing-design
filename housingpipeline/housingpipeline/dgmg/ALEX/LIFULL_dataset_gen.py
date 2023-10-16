@@ -76,9 +76,10 @@ lowest_corners = np.flatnonzero(lc_temp == lc_temp.min())
 def find_most_bottom_righty_edge():
     # for example, several edges might share the same bottom-left most corner,
     # but which one extends "exterior-most"?
+    pass
 
 
-exterior_walls.append()
+# exterior_walls.append()
 
 # Now, need an alorithm to repeatedly search for outermost connecting edges
 """
