@@ -25,8 +25,8 @@ Outputs:
   
   A modified .npy file named "HHGPP_(train/eval/test)_data.npy" with the following information:
     A list of lists with entries defined below (length == number of valid LIFULL floorplans)
-      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
       "nds": all graph nodes with features in an (Nx13) list. Each node is represented as a one-hot encoded vector with 11 classes, concatinated with the node features [length, door/no door], this is [-1,-1] for room nodes.
+      "bbs": all graph node bounding boxes in an Nx4 list, including exterior wall nodes (EW have all been expanded 1 pixel in the positive x or y direction).
       "eds": all graph edges in a Ex3 list, with each edge represented as [src_node_id, +1/-1, dest_node_id] where +1 indicates an edge is present, -1 otherwise
       "eds_f": all graph edge types & features in an Nx3 list, with each entry represented as [edge type (0 - CE, or 1 - RA), edge feature 1, edge feature 2]
 
@@ -83,25 +83,6 @@ def is_adjacent(boxA, boxB, threshold = 0.03):
 
     return delta < threshold
 
-# def is_edge_adjacent(edgeA, boxB, threshold = 0.01):
-#     # This threshold allows for 2 px of error (for 256x256 image)
-#     # Returns whether edgeA and boxB are adjacent. Perpendicular also returns true.
-#     xa0, ya0, xa1, ya1 = edgeA
-#     xb0, yb0, xb1, yb1 = boxB
-
-#     wa, wb = xa1 - xa0, xb1 - xb0
-#     ha, hb = ya1 - ya0, yb1 - yb0
-
-#     xca, xcb = (xa0 + xa1) / 2.0, (xb0 + xb1) / 2.0
-#     yca, ycb = (ya0 + ya1) / 2.0, (yb0 + yb1) / 2.0
-    
-#     delta_x = np.abs(xcb - xca) - (wa + wb) / 2.0
-#     delta_y = np.abs(ycb - yca) - (ha + hb) / 2.0
-
-#     delta = max(delta_x, delta_y)
-
-#     return delta < threshold
-
 def room_edge_adjacent(room, edge, edges_room_mapping, bbs):
     ''' Checks if room is adjacent to edge '''
 
@@ -132,22 +113,23 @@ def get_exterior_walls(rooms_connected, edges, doors):
     return exterior_walls
 
 def edge_length(edge):
+    ''' Returns edge length '''
     x0, y0, x1, y1 = edge
-    if x0 != x1 and y0 != y1:
-        raise Exception("Edge length called for bounding box of width > 0")
-    if x0 == x1:
-        return abs(y1-y0)
-    if y0 == y1:
-        return abs(x1-x0)
+    return np.sqrt((x1-x0)**2 + (y1-y0)**2)
+    # if abs(x0 - x1) <= 3:
+    #     return abs(y1-y0)
+    # if abs(y0 - y1) <= 3:
+    #     return abs(x1-x0)
+    # else:
+    #     return np.sqrt((x1-x0)^2 + (y1-y0)^2) # For edges that are at a too large slope, return adge length with pythagoras
 
 def give_edge_width_1(edge):
+    ''' Gives the bounding box of an edge width 1 '''
     x0, y0, x1, y1 = edge
-    if x0 != x1 and y0 != y1:
-        raise Exception("Give edge width called for bounding box of width > 0")
     if x0 == x1:
-        x1 = x1 + 1
+        x1 = x1 + 1/256
     if y0 == y1:
-        y1 = y1 + 1
+        y1 = y1 + 1/256
     return [x0, y0, x1, y1]
 
 def edge_has_door(room1, room2, edges_room_mapping, doorlist):
@@ -163,7 +145,7 @@ def edge_has_door(room1, room2, edges_room_mapping, doorlist):
     return False
 
 def relative_direction(bb1, bb2):
-    # Gives relative direction from bb1 to bb2
+    ''' Gives relative direction from bb1 to bb2 '''
     # (E/NE/N/NW/W/SW/S/SE)=(0/1/2/3/4/5/6/7)
     x0, y0, x1, y1 = bb1
     x2, y2, x3, y3 = bb2
@@ -192,147 +174,70 @@ def relative_direction(bb1, bb2):
     return direction
 
 def find_angle_EW(EW1, EW2):
-    ''' Get the angles between the EW '''
-
-    edges = np.array(home[2])[:,0:4]
-    doors = np.array(home[4])
-    rooms_connected = np.array(home[3], dtype=object)
-    EW_angles = get_connection_corners(edges, rooms_connected)
-    angle = 0
-    # Go twice through the list (also backwards)
-    for EW_angle in EW_angles:
-        if EW1 == EW_angle[1] and EW2 == EW_angle[3]:
-            angle = EW_angle[4]
-        if EW1 == EW_angle[3] and EW2 == EW_angle[1]: #backwards
-            angle = EW_angle[4] + 180
-            if angle > 180:
-                angle = angle - 360
+    ''' Get the angles between EW1 and EW2 from the bounding boxes '''
     
+    angle = 0
+    
+    x0, y0, x1, y1 = EW1
+    x2, y2, x3, y3 = EW2
+
+    # If left endpoint wall 2 on right endpoint of wall 1:
+    if  (x1,y1) == (x2, y2):
+        angle1 = np.degrees(np.arctan2(y1-y0, x1-x0))
+        angle2 = np.degrees(np.arctan2(y3-y2, x3-x2))
+        angle = angle2 - angle1
+
+    # If right endpoint wall 2 on right endpoint of wall 1:
+    if  (x1,y1) == (x3, y3):
+        angle1 = np.degrees(np.arctan2(y1-y0, x1-x0))
+        angle2 = np.degrees(np.arctan2(y2-y3, x2-x3)) # flipped
+        angle = angle2 - angle1
+
+    # If left endpoint wall 2 on left endpoint of wall 1:
+    if  (x0,y0) == (x2, y2):
+        angle1 = np.degrees(np.arctan2(y0-y1, x0-x1)) # flipped
+        angle2 = np.degrees(np.arctan2(y3-y2, x3-x2))
+        angle = angle2 - angle1
+
+    # If right endpoint wall 2 on left endpoint of wall 1:
+    if  (x0,y0) == (x3, y3):
+        angle1 = np.degrees(np.arctan2(y0-y1, x0-x1)) # flipped
+        angle2 = np.degrees(np.arctan2(y2-y3, x2-x3)) # flipped
+        angle = angle2 - angle1
+
+    if angle <= -180:
+        angle = angle + 360
+    if angle > 180:
+        angle = angle - 360
     return angle
 
-def find_approximate_centroid(room_idx, house_edges, house_edge_adjacencies):
-    # room_idx = data[house_nr][0].index(room_type)
-    room_edge_ids = [id for id, edge in enumerate(house_edge_adjacencies) if room_idx in edge]
-    room_edges = np.array(house_edges)[room_edge_ids]
-    # Weight each edge by it's length
-    weights = np.linalg.norm(room_edges[:,[2,3]] - room_edges[:,[0,1]], axis=1)**1.5
-    # Uncomment below to remove weights
-    # weights = np.ones(len(room_edges))
-    # print(f"weights:\n {weights}")
-    # print(f"roomedges:\n {room_edges}")
-    x = np.concatenate([room_edges[:,0].reshape(-1,1), room_edges[:,2].reshape(-1,1)], axis=1)
-    x_avg = np.mean(x, axis=1).reshape(-1,1)
-    y = np.concatenate([room_edges[:,1].reshape(-1,1), room_edges[:,3].reshape(-1,1)], axis=1)
-    y_avg = np.mean(y, axis=1).reshape(-1,1)
-    room_edge_midpoints = np.concatenate((x_avg, y_avg), axis=1)
-    # print(f"room_edge_midpoints:\n {room_edge_midpoints}")
-    room_x, room_y = np.average(room_edge_midpoints, axis = 0, weights=weights)
-    return room_x, room_y
-
-house_nr = 0
-
-def swap(vars):
-    vars = vars.copy()
-    vars[:,[0,1]] = vars[:,[2,3]]
-    return vars
-
-def get_exterior_walls(rooms_connected, edges, doors):
-    indices = [i for i, item in enumerate(rooms_connected) if len(item) == 1]
-    exterior_walls = [(i,list(edges[i]),1) if i in doors else (i,list(edges[i]),0) for i in indices]
-    return exterior_walls
-
-def calculate_angle(prev_source, prev_dest, source, dest):
-    prev_vector = (prev_dest[0] - prev_source[0], prev_dest[1] - prev_source[1])
-    vector = (dest[0] - source[0], dest[1] - source[1])
-    angle_radians = np.arctan2(vector[1], vector[0]) - np.arctan2(prev_vector[1], prev_vector[0])
-    angle_degrees = np.degrees(angle_radians)
-    if (angle_degrees > 180):
-      angle_degrees = angle_degrees - 360
-    if (angle_degrees < -180):
-      angle_degrees = angle_degrees + 360
-    return angle_degrees
-
-def calculate_centroid(points):
-    x_sum = sum(point[0] for point in points)
-    y_sum = sum(point[1] for point in points)
-    centroid_x = x_sum / len(points)
-    centroid_y = y_sum / len(points)
-    return (centroid_x, centroid_y)
-
-def get_next_corner(exterior_wall_coord, corners, corner_points):
-    if corner_points.index((exterior_wall_coord[0], exterior_wall_coord[1])) < corner_points.index((exterior_wall_coord[2], exterior_wall_coord[3])):
-      return  ((exterior_wall_coord[0], exterior_wall_coord[1]),(exterior_wall_coord[2], exterior_wall_coord[3]))
-    else:
-      return ((exterior_wall_coord[2], exterior_wall_coord[3]),(exterior_wall_coord[0], exterior_wall_coord[1]))
-
-def get_connection_corners(edges, rooms_connected):
-    corners = []
-    doors = np.array(home[4])
-    exterior_walls = get_exterior_walls(rooms_connected, edges, doors)
-
-    #I first have to find all the corners to be able to calculate the centroid, so I can make sure I go in a clockwise direction in the polygon
-    for i in range(len(exterior_walls) - 1):
-      x_i0, y_i0 = exterior_walls[i][1][0], exterior_walls[i][1][1]
-      x_i1, y_i1 = exterior_walls[i][1][2], exterior_walls[i][1][3]
-
-      for j in range(i + 1, len(exterior_walls)):
-        x_j0, y_j0 = exterior_walls[j][1][0], exterior_walls[j][1][1]
-        x_j1, y_j1 = exterior_walls[j][1][2], exterior_walls[j][1][3]
-
-        if x_i0 == x_j0 and y_i0 == y_j0:
-          corners.append((exterior_walls[i], exterior_walls[j], (x_i0, y_i0)))
-        elif x_i0 == x_j1 and y_i0 == y_j1:
-          corners.append((exterior_walls[i], exterior_walls[j], (x_i0, y_i0)))
-        elif x_i1 == x_j0 and y_i1 == y_j0:
-          corners.append((exterior_walls[i], exterior_walls[j], (x_i1, y_i1)))
-        elif x_i1 == x_j1 and y_i1 == y_j1:
-          corners.append((exterior_walls[i], exterior_walls[j], (x_i1, y_i1)))
 
 
-
-    #[x0, y0, x1, y1]
-    #np.arctan2(y,x) so I MUST SWITCH THE INPUT
-    corner_points = [corners[i][2] for i in range(len(corners))]
-    centroid = calculate_centroid(corner_points)
-    corners = sorted(corners, key = lambda x: (math.atan2((x[2][1]-centroid[1]),(x[2][0]-centroid[0])) + 2 * np.pi) % (2 * np.pi), reverse=True)
-    sorted_corner_points = [corners[i][2] for i in range(len(corners))]
-
-
-    # for i in range(len(exterior_walls)):
-    #   source, dest = get_next_corner(exterior_walls[i][1], corners, sorted_corner_points)
-    #   print(exterior_walls[i][1])
-    #   print(source, dest)
-
-    connection_corners = []
-    source, dest = get_next_corner(exterior_walls[0][1], corners, sorted_corner_points)
-    initial_source, initial_dest = source, dest
-    initial_wall = exterior_walls[0]
-    previous_wall = exterior_walls.pop(0)
-    while(len(exterior_walls) != 0):
-        for i, exterior_wall in enumerate(exterior_walls):
-            if np.array_equal(exterior_wall[1][0:2], dest):
-              connection_corners.append([0, previous_wall[0], 0, exterior_wall[0], calculate_angle(source, dest, exterior_wall[1][0:2], exterior_wall[1][2:4]), 0])
-              dest = exterior_wall[1][2:4]
-              previous_wall = exterior_walls.pop(i)
-              source = exterior_wall[1][0:2]
-            elif np.array_equal(exterior_wall[1][2:4], dest):
-              connection_corners.append([0, previous_wall[0], 0, exterior_wall[0], calculate_angle(source, dest, exterior_wall[1][2:4], exterior_wall[1][0:2]), 0])
-              dest = exterior_wall[1][0:2]
-              previous_wall = exterior_walls.pop(i)
-              source = exterior_wall[1][2:4]
-    connection_corners.append([0, previous_wall[0], 0, initial_wall[0], calculate_angle(source, dest, initial_source, initial_dest), 0])
-    # print(*connection_corners, sep="\n")
-    return connection_corners
-
-
-
-
+# # Was used for plotting
+# def find_approximate_centroid(room_idx, house_edges, house_edge_adjacencies):
+#     # room_idx = data[house_nr][0].index(room_type)
+#     room_edge_ids = [id for id, edge in enumerate(house_edge_adjacencies) if room_idx in edge]
+#     room_edges = np.array(house_edges)[room_edge_ids]
+#     # Weight each edge by it's length
+#     weights = np.linalg.norm(room_edges[:,[2,3]] - room_edges[:,[0,1]], axis=1)**1.5
+#     # Uncomment below to remove weights
+#     # weights = np.ones(len(room_edges))
+#     # print(f"weights:\n {weights}")
+#     # print(f"roomedges:\n {room_edges}")
+#     x = np.concatenate([room_edges[:,0].reshape(-1,1), room_edges[:,2].reshape(-1,1)], axis=1)
+#     x_avg = np.mean(x, axis=1).reshape(-1,1)
+#     y = np.concatenate([room_edges[:,1].reshape(-1,1), room_edges[:,3].reshape(-1,1)], axis=1)
+#     y_avg = np.mean(y, axis=1).reshape(-1,1)
+#     room_edge_midpoints = np.concatenate((x_avg, y_avg), axis=1)
+#     # print(f"room_edge_midpoints:\n {room_edge_midpoints}")
+#     room_x, room_y = np.average(room_edge_midpoints, axis = 0, weights=weights)
+#     return room_x, room_y
 
 new_data = []
 
-abc = 0 # used for restricting amount of homes processed
-
-for home in data[1:]:
+nr_homes = 0 # used for restricting amount of homes processed
+home_data_length = len(data)
+for home in data:
 
     # # Retrieve house-specific data
     # room_types = np.array(home[0])
@@ -377,14 +282,13 @@ for home in data[1:]:
     # Creating the bounding boxes for the rooms (Nx4)
     bbs = np.array([bb.tolist() for bb in home[1]]) / 256 # Values between 0 and 1
 
-
     # Find Exterior Walls and add to nodes (with features length and door) and bounding boxes list
     exterior_walls = get_exterior_walls(home[3], np.array(home[2])[:,:4], home[4]) # gives edge bb np.array(home[2])[i] on place 1 (out of [0,1,2])
     ex_wall_nodes = []
     ex_wall_bbs = []
     for nod in exterior_walls:
         ex_wall_nodes.append([nod[0] + len(nds), edge_length(nod[1]), nod[2]])
-        ex_wall_bbs.append(give_edge_width_1(nod[1]))
+        ex_wall_bbs.append(nod[1]) # Edges have width 0 now still
     ex_wall_nodes = np.array(ex_wall_nodes)
     ex_wall_bbs = np.array(ex_wall_bbs) / 256 # Bounding boxes of Exterior Walls values scaled between 0 and 1
 
@@ -435,29 +339,23 @@ for home in data[1:]:
                     else:
                         triples.append([k,-1,l])
 
-    triples = np.array(triples)
-    eds = triples
+    eds = np.array(triples)
+    
 
-
-    # Creating the edge features list (Ex3), [edge type (0 - CE, or 1 - RA), Door Feature, Angle Feature]
-    # CREATE LIST WITH ALL EDGES WITH STANDARD FEATURES (DOOR FEATURE = 0 and Angle Feature = 0)
-    all_edges = np.array(home[2])[:,:4] / 256 # all edges with values between 0 and 1
-
+    # Creating the edge features list (Ex3), [edge type (CE=0 or RA=1), Feature1, Feature2]
+    # For each edge [from, connected, to], if from node and/or to node is a room: edge type is RA (1) where feature1 is a door feature (no door=0/door=1) and
+    # Feature2 is the relative direction from node 1 to node 2 (E/NE/N/NW/W/SW/S/SE/Undefined)=(0/1/2/3/4/5/6/7/8).
+    # if from and to are Exterior Wall: edge type is CE where Feature1 is the angle from EW1 to EW2 in degrees and Feature2 is 0.
 
     edges_f = [[0, 0, 0] for i in range(len(eds))] # Create list for features [0, 0, 0]
 
-    '''
-    For each edge [from, connected, to], if from or to is a room: edge type is RA (1) with door feature (0/1) and relative direction (E/NE/N/NW/W/SW/S/SE/Undefined)=(0/1/2/3/4/5/6/7/8)
-                                    if from and to are Exterior Wall: edge type is CE (0) with angle feature in degrees and 0.
-    '''
-
-    
+    # Create edges_f here
     i=0
     for edge in eds:
         if edge[0] not in range(len(rooms)) and edge[2] not in range(len(rooms)):  # Connection between two EW
             edges_f[i][0] = 0 # Edge type is CE
-
-            edges_f[i][1] = find_angle_EW(edge[0], edge[2]) 
+            if edge[1] == 1:
+                edges_f[i][1] = find_angle_EW(bbs[edge[0]], bbs[edge[2]])
 
         else: # Connection is RA
             edges_f[i][0] = 1
@@ -472,38 +370,28 @@ for home in data[1:]:
     edges_f = np.array(edges_f)
 
 
+    # # Print stuff for checking
+    # print(nds)
+    # print(bbs*256)
+    # eee = np.hstack((eds,edges_f))
+    # for e in eee:
+    #     if e[3] == 0 and e[1] == 1:
+    #         print(e)
+
+
+    # Give edges width 1 (1/256 actually) here  for each item in bbs list (leaves bounding boxes with width != 0 alone)
+    for bb in range(len(bbs)):
+        bbs[bb] = give_edge_width_1(bbs[bb])
+
+    new_data.append([nds, bbs, eds, edges_f])
+
+    nr_homes = nr_homes + 1
+    print(f'{nr_homes} out of {home_data_length}')
+    # if nr_homes == 10: # amount of rooms we want in the list
+    #     break
 
 
 
-
-    # # This converts bounding boxes into masks that fit the needed image size
-    # im_size = 64
-    # rooms_mks = np.zeros((len(nds), im_size, im_size)) # Dim = (# nodes, image size, image size)
-    # for k, (rm, bb) in enumerate(zip(nodes, bbs)):
-    #   if rm > 0:
-    #     x0, y0, x1, y1 = im_size*bb
-    #     x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
-    #     rooms_mks[k, x0:x1+1, y0:y1+1] = 1.0
-    # rooms_mks = torch.FloatTensor(rooms_mks)
-    
-    print(bbs)
-    print(nds)
-    print(eds)
-    print(edges_f)
-    
-    bbs = bbs.tolist()
-    nds = nds.tolist()
-    eds = eds.tolist()
-    edges_f = edges_f.tolist()
-
-    new_data.append([bbs, nds, eds, edges_f])
-
-    abc = abc + 1
-    if abc == 1: # amount of rooms we want in the list
-        break
-
-
-# print(new_data)
 # Finally, save the list:
 
 with open(new_data_path, 'wb') as f:
