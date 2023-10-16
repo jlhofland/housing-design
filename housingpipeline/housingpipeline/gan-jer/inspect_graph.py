@@ -20,7 +20,7 @@ while not correct and i < len(files):
     g = dgl.load_graphs(os.path.join(folder, files[i]))[0][0]
 
     # Add legenda to plot
-    plt.figure(figsize=(5, 5))
+    plt.figure(figsize=(10, 10))
     plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
     # Get labels and colors
@@ -29,8 +29,14 @@ while not correct and i < len(files):
     # Translate to Homogeneous graph
     hg = dgl.to_homogeneous(g)
 
+    # Convert to networkx
+    ng = hg.to_networkx()
+
+    # Add positional constraints for the nodes
+    pos = nx.spring_layout(ng)
+
     # Draw the graph
-    nx.draw(hg.to_networkx(), node_color=colors, labels=labels, font_size=7)
+    nx.draw(ng, pos=pos, node_color=colors, labels=labels, font_size=7)
     plt.show(block=False)
 
     # Ask the user if the plot is correct
