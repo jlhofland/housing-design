@@ -1,25 +1,50 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
+# Description: Inspect the graph structure of the dataset
 import dgl
-from dgl.data import DGLDataset
 import os
-import dgl.function as fn
-import dgl.nn as dglnn
-import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
+import networkx as nx
+import draw_graph_help
 
 # Get graphs
 folder = 'dgl_graphs'
 files = os.listdir(folder)
-g = dgl.load_graphs(os.path.join(folder, files[0]))[0][0]
 
-# Print etypes
-print(g.canonical_etypes)
+# Pr
+i = 0
+correct = False
 
-# save the etypes and save to pickle
-rel_names = g.canonical_etypes
-import pickle
-with open('rel_names.pkl', 'wb') as f:
-    pickle.dump(rel_names, f)
+# Loop through graphs
+while not correct and i < len(files):
+    # Get graph and increment counter
+    g = dgl.load_graphs(os.path.join(folder, files[i]))[0][0]
 
+    # Add legenda to plot
+    plt.figure(figsize=(5, 5))
+    plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
+    # Get labels and colors
+    labels, colors = draw_graph_help.assign_node_labels_and_colors(g)
+
+    # Translate to Homogeneous graph
+    hg = dgl.to_homogeneous(g)
+
+    # Draw the graph
+    nx.draw(hg.to_networkx(), node_color=colors, labels=labels, font_size=7)
+    plt.show(block=False)
+
+    # Ask the user if the plot is correct
+    response = input("What would you like to do? (continue/regenerate/stop): ").strip().lower()
+    if response == 'continue':
+        correct = True
+    elif response == 'regenerate':
+        plt.close()
+        i += 1
+    elif response == 'stop':
+        # stop the program
+        print("Exiting the program.")
+        exit()
+    else:
+        print("Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+
+print("End of the program.")
