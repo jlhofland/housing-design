@@ -2,14 +2,19 @@
 IAAIP 2023 Team 2 - Full Pipeline Script for Home Floor Plan Generation via Heterogeneous GNNs and GANs
 """
 import argparse
+import dgl
+import os
+
 from housingpipeline.floor_plan_pipeline.input_to_graph import create_graph_from_user_input
 
 # from .input_to_graph import create_graph_from_user_input
 
 
 def main(args):
-    create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
-
+    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
+    g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
+    dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
+    print("save my graph?")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Full Pipeline")

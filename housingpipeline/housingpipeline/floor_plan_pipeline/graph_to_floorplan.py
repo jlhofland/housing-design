@@ -1,36 +1,36 @@
 import argparse
 import os
 import numpy as np
-import math
-import sys
-import random
+# import math
+# import sys
+# import random
 
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
-from dataset.floorplan_dataset_maps_functional_high_res import FloorplanGraphDataset, floorplan_collate_fn
+from housingpipeline.houseganpp.dataset.floorplan_dataset_maps_functional_high_res import FloorplanGraphDataset, floorplan_collate_fn
 
-from torch.utils.data import DataLoader
-from torchvision import datasets
-from torch.autograd import Variable
+# from torch.utils.data import DataLoader
+# from torchvision import datasets
+# from torch.autograd import Variable
 
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.autograd as autograd
+# import torch.nn as nn
+# import torch.nn.functional as F
+# import torch.autograd as autograd
 import torch
-from PIL import Image, ImageDraw, ImageFont
-import svgwrite
-from models.models import Generator
+# from PIL import Image, ImageDraw, ImageFont
+# import svgwrite
+from housingpipeline.houseganpp.models.models import Generator
 # from models.models_improved import Generator
 
-from misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph
-from collections import defaultdict
-import matplotlib.pyplot as plt
-import networkx as nx
-import glob
-import cv2
-import webcolors
-import time
+from housingpipeline.houseganpp.misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph
+# from collections import defaultdict
+# import matplotlib.pyplot as plt
+# import networkx as nx
+# import glob
+# import cv2
+# import webcolors
+# import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_cpu", type=int, default=16, help="number of cpu threads to use during batch generation")
@@ -82,8 +82,8 @@ def create_floorplan_from_graph(graph):
     mks, nds, eds, _, _, eds_f = graph
     real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] # Add the [:,:-2] to cut off the node features and leave the node types
     graph = [nds, eds, eds_f]
-    true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])
-    graph_im.save('./{}/graph_{}.png'.format(opt.out, i)) # save graph
+    # true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])
+    # graph_im.save('./{}/graph_{}.png'.format(opt.out, i)) # save graph
 
     # add room types incrementally
     _types = sorted(list(set(real_nodes))) # Set() also removes duplicates. So, it is a sorted list of unique node t
