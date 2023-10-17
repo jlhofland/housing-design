@@ -1,6 +1,6 @@
 from functools import partial
-from housingpipeline.dgmg.utils import parse_input_json, tensor_to_one_hot
-from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset
+from utils import parse_input_json, tensor_to_one_hot
+from houses import HouseDataset, generate_home_dataset
 
 import os
 import dgl

@@ -4,20 +4,25 @@ Paper: https://arxiv.org/pdf/1803.03324.pdf
 
 This implementation works with a minibatch of size 1 only for both training and inference.
 """
+import wandb
+
+
 import argparse
 import datetime
 import time
 import os
 
 import torch
-from housingpipeline.dgmg.model import DGMG
+from model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from housingpipeline.dgmg.utils import Printer
+from utils import Printer
 
 
 def main(opts):
+    # Initialize WandB
+    wandb.init(project="HousingDesign", entity="alexandrubobe")
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
 
@@ -27,9 +32,9 @@ def main(opts):
         if opts["dataset"] == "cycles":
             raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
-            from housingpipeline.dgmg.houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
+            from houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
 
-            dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
+            dataset = CustomDataset("path_to_ui_dataset", "path_to_initialization_dataset", "path_to_dataset")
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -139,6 +144,7 @@ def main(opts):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
+                wandb.log({"epoch": epoch, "loss": batch_loss, "prob": batch_prob})
 
         t3 = time.time()
 
@@ -176,6 +182,7 @@ def main(opts):
 
         del model.g
         torch.save(model, "./model.pth")
+        wandb.log_artifact(model, f'{model}_model', type='model')
 
     elif os.path.exists("./model.pth"):
         t1 = time.time()
