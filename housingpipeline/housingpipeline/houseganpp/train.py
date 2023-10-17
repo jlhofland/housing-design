@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageOps
 from housingpipeline.houseganpp.misc.utils import combine_images, _init_input, selectRandomNodes, selectNodesTypes
 from housingpipeline.houseganpp.models.models import Discriminator, Generator, compute_gradient_penalty
 
+os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/houseganpp/")
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -48,7 +49,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=10, help="interval between image sampling"
+    "--sample_interval", type=int, default=3, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -60,14 +61,14 @@ parser.add_argument(
 parser.add_argument(
     "--target_set",
     type=str,
-    default='A',
+    default='D',
     choices=['A', 'B', 'C', 'D', 'E'],
     help="which split to remove",
 )
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/datasets",
+    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets",
     help="path to the dataset",
 )
 parser.add_argument(
@@ -167,7 +168,7 @@ fp_dataset_train = FloorplanGraphDataset(
 fp_loader = torch.utils.data.DataLoader(
     fp_dataset_train,
     batch_size=opt.batch_size,
-    shuffle=True,
+    shuffle=False,
     num_workers=opt.n_cpu,
     collate_fn=floorplan_collate_fn,
     pin_memory=False,
@@ -205,7 +206,7 @@ batches_done = 0
 for epoch in range(opt.n_epochs):
     for i, batch in enumerate(fp_loader):
         # Unpack batch
-        mks, nds, eds, nd_to_sample, ed_to_sample, eds_f = batch
+        mks, nds, eds, eds_f, nd_to_sample, ed_to_sample= batch
         # print(f"mks:\n Shape:{mks.shape}\n {mks}")
         # print(f"nds:\n Shape:{nds.shape}\n {nds}")
         # print(f"eds:\n Shape:{eds.shape}\n {eds}")

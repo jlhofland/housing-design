@@ -16,6 +16,16 @@ def dataset_based_configure(opts):
     return opts
 
 
+synthetic_dataset_configure = {
+    "node_hidden_size": 16,
+    "num_propagation_rounds": 2,
+    "optimizer": "Adam",
+    "nepochs": 10, #25
+    "ds_size": 100,#0,
+    "num_generated_samples": 20,#00,
+}
+
+
 cycles_configure = {
     **synthetic_dataset_configure,
     **{

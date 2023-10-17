@@ -14,7 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json, os, random, math
+import json
+import os
+import random
+import math
 from collections import defaultdict
 
 import torch
@@ -28,12 +31,12 @@ from skimage.transform import resize as imresize
 # import pycocotools.mask as mask_utils
 import glob
 from PIL import Image, ImageDraw, ImageOps, ImageFilter, ImageFont, ImageColor
-#from pygraphviz import *
+# from pygraphviz import *
 import cv2
 from torchvision.utils import save_image
 import networkx as nx
 import copy
-from misc.intersections import doIntersect
+from housingpipeline.houseganpp.misc.intersections import doIntersect
 import svgwrite
 import random
 import matplotlib.pyplot as plt
@@ -42,24 +45,29 @@ import webcolors
 cv2.setNumThreads(0)
 EXP_ID = random.randint(0, 1000000)
 
-ROOM_CLASS = {
-    "living_room": 1,
-    "kitchen": 2,
-    "bedroom": 3,
-    "bathroom": 4,
-    "balcony": 5,
-    "entrance": 6,
-    "dining room": 7,
-    "study room": 8,
-    "storage": 10,
-    "front door": 15,
-    "unknown": 16,
-    "interior_door": 17,
-}
+ROOM_CLASS = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4,
+              "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
+
+
+# ROOM_CLASS = {
+#     "living_room": 1,
+#     "kitchen": 2,
+#     "bedroom": 3,
+#     "bathroom": 4,
+#     "balcony": 5,
+#     "entrance": 6,
+#     "dining room": 7,
+#     "study room": 8,
+#     "storage": 10,
+#     "front door": 15,
+#     "unknown": 16,
+#     "interior_door": 17,
+# }
 CLASS_ROM = {}
 for x, y in ROOM_CLASS.items():
     CLASS_ROM[y] = x
 ID_COLOR = {
+    0: "#D3A2C7",
     1: "#EE4D4D",
     2: "#C67C7B",
     3: "#FFD274",
@@ -68,10 +76,8 @@ ID_COLOR = {
     6: "#7BA779",
     7: "#E87A90",
     8: "#FF8C69",
-    10: "#1F849B",
-    15: "#727171",
-    16: "#785A67",
-    17: "#D3A2C7",
+    9: "#1F849B",
+    10: "#727171",
 }
 
 
@@ -86,7 +92,7 @@ def selectRandomNodes(nd_to_sample, batch_size):
         N = np.random.randint(rooms_num, size=1)
         fixed_nodes_state = torch.tensor(
             np.random.choice(list(range(rooms_num)), size=N, replace=False)
-        ).cuda()  ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        ).cuda()  # torch.tensor(list(range(rooms_num))).long().cuda() ##
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num
@@ -101,7 +107,7 @@ def selectRandomNodes(nd_to_sample, batch_size):
 def selectNodesTypes(nd_to_sample, batch_size, nds):
     # this line creates a list of all room-type numbers, empy lists for "fixed_rooms_num" and "fixed_nodes", and a shift value of 0
     all_types, fixed_rooms_num, fixed_nodes, shift = (
-        [ROOM_CLASS[k] - 1 for k in ROOM_CLASS],
+        [ROOM_CLASS[k] for k in ROOM_CLASS],
         [],
         [],
         0,
@@ -113,7 +119,7 @@ def selectNodesTypes(nd_to_sample, batch_size, nds):
         rooms_num = np.array(rooms).shape[-1]
         # taking the single sample's indices, we return indices where the nodes == 1
         # this basically returns the room types for sample's rooms
-        _types = np.where(nds[rooms] == 1)[1]
+        _types = np.where(nds[rooms][:,:-2] == 1)[1]
         # this picks a random assortment of room types
         _t = [t for t in all_types if random.uniform(0, 1) > 0.5]
         # if sample type in random selection of types, add room idx to list
@@ -139,10 +145,11 @@ def fix_nodes(prev_mks, ind_fixed_nodes):
     ind_not_fixed_nodes = torch.tensor(
         [k for k in range(given_masks.shape[0]) if k not in ind_fixed_nodes]
     )
-    ## Set non fixed masks to -1.0
+    # Set non fixed masks to -1.0
     given_masks[ind_not_fixed_nodes.long()] = -1.0
-    given_masks = given_masks.unsqueeze(1) # Inserts another dimension at position 1
-    ## Add channel to indicate given nodes (these are the "flag" masks in the paper)
+    # Inserts another dimension at position 1
+    given_masks = given_masks.unsqueeze(1)
+    # Add channel to indicate given nodes (these are the "flag" masks in the paper)
     inds_masks = torch.zeros_like(given_masks)
     inds_masks[ind_not_fixed_nodes.long()] = 0.0
     inds_masks[ind_fixed_nodes.long()] = 1.0
@@ -176,7 +183,8 @@ def pad_im(cr_im, final_size=256, bkg_color="white"):
     new_size = int(np.max([np.max(list(cr_im.size)), final_size]))
     padded_im = Image.new("RGBA", (new_size, new_size), "white")
     padded_im.paste(
-        cr_im, ((new_size - cr_im.size[0]) // 2, (new_size - cr_im.size[1]) // 2)
+        cr_im, ((new_size - cr_im.size[0]) // 2,
+                (new_size - cr_im.size[1]) // 2)
     )
     padded_im = padded_im.resize((final_size, final_size), Image.ANTIALIAS)
     return padded_im
@@ -207,7 +215,8 @@ def draw_masks(masks, real_nodes, im_size=256):
         # draw contour
         m_cv = m_lg[:, :, np.newaxis].astype("uint8")
         ret, thresh = cv2.threshold(m_cv, 127, 255, 0)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = [c for c in contours if len(contours) > 0]
         cnt = np.zeros((256, 256, 3)).astype("uint8")
         cv2.drawContours(cnt, contours, -1, (255, 255, 255, 255), 1)
@@ -242,7 +251,8 @@ def combine_images(samples_batch, nodes_batch, edges_batch, nd_to_sample, ed_to_
         #                              transpose(2, 0, 1))/255.0)
         all_imgs.append(
             torch.FloatTensor(
-                np.array(_image.convert("RGBA")).astype("float").transpose(2, 0, 1)
+                np.array(_image.convert("RGBA")).astype(
+                    "float").transpose(2, 0, 1)
             )
             / 255.0
         )
@@ -334,7 +344,8 @@ def remove_multiple_components(masks, nodes):
         m_cv[m_cv < 0] = 0.0
         m_cv = m_cv.astype("uint8")
         ret, thresh = cv2.threshold(m_cv, 127, 255, 0)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) > 1:
             cnt_m = np.zeros_like(m_cv)
             c = max(contours, key=cv2.contourArea)
@@ -387,7 +398,8 @@ def estimate_graph(masks, nodes, G_gt):
                 m1[m1 <= 0] = 0.0
                 m2[m2 > 0] = 1.0
                 m2[m2 <= 0] = 0.0
-                iou = np.logical_and(m1, m2).sum() / float(np.logical_or(m1, m2).sum())
+                iou = np.logical_and(m1, m2).sum() / \
+                    float(np.logical_or(m1, m2).sum())
                 if iou > 0 and iou < 0.2:
                     doors_rooms_map[k].append((l, iou))
 

@@ -214,7 +214,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
         self.init_size = 32 // 4
-        self.l1 = nn.Sequential(nn.Linear(146, 16 * self.init_size ** 2)) #146
+        self.l1 = nn.Sequential(nn.Linear(141, 16 * self.init_size ** 2)) #146
         self.upsample_1 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
         self.upsample_2 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
         self.upsample_3 = nn.Sequential(*conv_block(16, 16, 4, 2, 1, act="leaky", upsample=True))
@@ -240,7 +240,7 @@ class Generator(nn.Module):
         # z, given_m=given_masks_in, given_y=given_nds, given_w=given_eds, given_ed_f=given_edge_features
         z = z.view(-1, 128)
         # include nodes
-        y = given_y.view(-1, 18)
+        y = given_y.view(-1, 13)
         z = torch.cat([z, y], 1)
         x = self.l1(z)      
         # f are the expanded node/noise vectors now in 3D
@@ -275,7 +275,7 @@ class Discriminator(nn.Module):
             *conv_block(16, 16, 3, 1, 1, act="leaky"),
             *conv_block(16, 16, 3, 1, 1, act="leaky"),
             *conv_block(16, 16, 3, 1, 1, act="leaky"))
-        self.l1 = nn.Sequential(nn.Linear(18, 8 * 64 ** 2))
+        self.l1 = nn.Sequential(nn.Linear(13, 8 * 64 ** 2))
         self.cmp_1 = CMP(in_channels=16, feat_size=64)
         self.downsample_1 = nn.Sequential(*conv_block(16, 16, 3, 2, 1, act="leaky"))
         self.cmp_2 = CMP(in_channels=16, feat_size=32)

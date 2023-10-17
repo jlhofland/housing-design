@@ -45,7 +45,7 @@ def main(opts):
             batch_size=1,
             shuffle=False,
             num_workers=0,
-            collate_fn=dataset.collate_single,
+            # collate_fn=dataset.collate_single,
         )
         # model = model.cuda()
 
@@ -184,7 +184,7 @@ def main(opts):
             raise ValueError("Cycles dataset no longer supported")
 
         elif opts["dataset"] == "houses":
-            from houses import HouseModelEvaluation, HousePrinting
+            from .houses import HouseModelEvaluation, HousePrinting
 
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
@@ -227,17 +227,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="training_datasets/houses_dataset.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="training_datasets/houses_initialization_dataset.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="training_datasets/user_input_datasets/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    from utils import setup
+    from housingpipeline.dgmg.utils import setup
 
     opts = setup(args)
 

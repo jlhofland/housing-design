@@ -25,7 +25,7 @@ import PIL
 import glob
 from PIL import Image, ImageDraw, ImageOps, ImageFilter
 import random
-from misc.utils import ROOM_CLASS, ID_COLOR
+from housingpipeline.houseganpp.misc.utils import ROOM_CLASS, ID_COLOR
 import matplotlib.pyplot as plt
 
 
@@ -46,6 +46,7 @@ def filter_graphs(graphs):
             if (
                 room_type_and_features[edge[0]][0] == 1
                 and room_type_and_features[edge[2]][0] == 1
+                and edge[1] == 1
             ):
                 # both exterior walls.
                 num_corner_type_edges += 1
@@ -56,13 +57,13 @@ def filter_graphs(graphs):
             (len(room_type_and_features) == 0)
             or (check_none > 0)
             or (len(room_type_and_features) != len(room_bbs))
-            or (num_ext_walls != num_corner_type_edges)
+            or (2*num_ext_walls != num_corner_type_edges)
             or (len(edges) != len(edges_features))
         ):
             continue
 
         # update graph
-        new_graphs.append(g)
+        new_graphs.append(graph)
     return new_graphs
 
 
@@ -514,6 +515,7 @@ class FloorplanGraphDataset(Dataset):
                 "{}/HHGPP_train_data.npy".format(self.shapes_path), allow_pickle=True
             )
             self.augment = True
+            print(f"len: {len(self.subgraphs)}")
         elif split == "eval":
             self.subgraphs = np.load(
                 "{}/HHGPP_eval_data.npy".format(self.shapes_path), allow_pickle=True
@@ -539,15 +541,15 @@ class FloorplanGraphDataset(Dataset):
         self.subgraphs = split_subgraphs
         if split == "eval":
             self.subgraphs = self.subgraphs[:5000]  # max 5k
-
-        # doublecheck
-        deb_dic = defaultdict(int)
-        for g in self.subgraphs:
-            room_bbs = graph[0]
-            if len(room_bbs) > 0:
-                deb_dic[len(room_bbs)] += 1
-        defaultdict(sorted(deb_dic.items()))
-        print(f"Numbers of graphs with this many rooms + exterior walls:", deb_dic)
+        
+        # # doublecheck
+        # deb_dic = defaultdict(int)
+        # for g in self.subgraphs:
+        #     room_bbs = graph[0]
+        #     if len(room_bbs) > 0:
+        #         deb_dic[len(room_bbs)] += 1
+        # deb_dic = defaultdict(sorted(deb_dic.items()))
+        # print(f"Numbers of graphs with this many rooms + exterior walls:\n {deb_dic}")
 
     def __len__(self):
         return len(self.subgraphs)
@@ -555,7 +557,7 @@ class FloorplanGraphDataset(Dataset):
     def __getitem__(self, index):
         # load data for single floorplan layout graph
         graph = self.subgraphs[index]
-        room_bbs = graph[0]
+        rooms_bbs = graph[0]
         room_type_and_features = graph[1]
         edges = graph[2]
         edges_features = graph[3]
@@ -574,7 +576,7 @@ class FloorplanGraphDataset(Dataset):
         rooms_bbs = np.stack(rooms_bbs) / 256.0
 
         im_size = 64
-        rooms_mks = np.zeros((room_bbs.shape[0], im_size, im_size))
+        rooms_mks = np.zeros((rooms_bbs.shape[0], im_size, im_size))
         for k, bb in enumerate(rooms_bbs):
             x0, y0, x1, y1 = im_size * bb
             x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
@@ -663,9 +665,9 @@ def floorplan_collate_fn(batch):
         all_rooms_mks,
         all_nodes,
         all_edges,
+        all_edges_features,
         all_node_to_sample,
         all_edge_to_sample,
-        all_edges_features,
     )
 
 
