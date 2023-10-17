@@ -4,6 +4,8 @@ import random
 import dgl
 import time
 import torch
+from collections import OrderedDict
+
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -245,15 +247,19 @@ class HouseDataset(Dataset):
 class UserInputDataset(Dataset):
     def __init__(self, fname):
         super(UserInputDataset, self).__init__()
-
-        with open(fname, "rb") as f:
-            self.dataset = pickle.load(f)
+        self.index = 0
+        self.file_names = {}
+        with os.scandir(fname) as dir:
+            for entry in dir:
+                self.file_names[int(entry.name[:-5])] = entry.path
+            self.file_names = list(OrderedDict(sorted(self.file_names.items())).values())
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.file_names)
 
     def __getitem__(self, index):
-        return self.dataset[index]
+        return self.file_names[index]
+        
 
 class HouseModelEvaluation(object):
     # Generates new graphs, makes simple graph-validity checks, keeps track of these metrics, and plots groups of four graphs
