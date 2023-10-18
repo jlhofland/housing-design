@@ -4,6 +4,7 @@ import random
 import dgl
 import time
 import torch
+import json
 from collections import OrderedDict
 
 
@@ -222,6 +223,45 @@ def generate_home_dataset(g, num_homes):
 
     # End the decision list
 
+
+class CustomDataset(Dataset):
+    def __init__(self, user_input_folder, partial_seq_path, complete_seq_path):
+        super(CustomDataset, self).__init__()
+
+        self.file_names = {}
+        self.files = []
+        with os.scandir(user_input_folder) as dir:
+            for entry in dir:
+                self.file_names[int(entry.name[:-5])] = entry.path
+
+        self.files = list(OrderedDict(sorted(self.file_names.items())).values())
+        self.partial_seq = None
+        self.complete_seq = None
+
+        with open(partial_seq_path, "rb") as partial:
+            self.partial_seq = pickle.load(partial)
+
+        with open(complete_seq_path, "rb") as complete:
+            self.complete_seq = pickle.load(complete)
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+        user_input_path = self.files[index]
+        # user_input = None
+        # with open(self.files[index], "rb") as input:
+        #     user_input = json.load(input)
+        partial_seq = self.partial_seq[index]
+        complete_seq = self.complete_seq[index]
+        return (user_input_path, partial_seq, complete_seq)
+
+    def collate_single(self, batch):
+        assert len(batch) == 1, "Currently we do not support batched training"
+        return batch[0]
+
+    def collate_batch(self, batch):
+        return batch
 
 class HouseDataset(Dataset):
     def __init__(self, fname):
