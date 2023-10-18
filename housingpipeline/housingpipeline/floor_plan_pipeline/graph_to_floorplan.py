@@ -35,7 +35,7 @@ from housingpipeline.houseganpp.misc.utils import _init_input, ID_COLOR, draw_ma
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_cpu", type=int, default=16, help="number of cpu threads to use during batch generation")
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
-parser.add_argument("--checkpoint", type=str, default='./checkpoints/pretrained.pth', help="checkpoint path")
+parser.add_argument("--checkpoint", type=str, default='/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/exp_D_9.pth', help="checkpoint path")
 parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets", help="path to dataset list file")
 parser.add_argument("--out", type=str, default='./dump', help="output folder")
 opt = parser.parse_args()

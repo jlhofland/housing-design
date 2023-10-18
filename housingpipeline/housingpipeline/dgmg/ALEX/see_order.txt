@@ -1,0 +1,11 @@
+
+****NEW HOUSE****
+bathroom 0
+closet 0
+kitchen 0
+****NEW HOUSE****
+bathroom 0
+bedroom 0
+bedroom 1
+closet 0
+kitchen 0

@@ -19,8 +19,8 @@ def parse_input_json(file_path):
     room_number_data[5] = int(layout["bathrooms_plus?"])
 
     # Parse walls / connections into tensors
-    exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
-    connections_sequence = torch.tensor(layout["connections"], dtype=torch.float32)
+    exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float16)
+    connections_sequence = torch.tensor(layout["connections"], dtype=torch.float16)
 
     return room_number_data, exterior_walls_sequence, connections_sequence
 

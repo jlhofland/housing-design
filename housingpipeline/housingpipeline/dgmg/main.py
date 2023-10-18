@@ -149,6 +149,7 @@ def main(opts):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
+                torch.save(model.state_dict(), "./checkpoints/dgmg_model_epoch_"+str(epoch)+".pth")
 
         t3 = time.time()
 
@@ -237,17 +238,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/completed_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/partial_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/user_inputs_new_ids/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",

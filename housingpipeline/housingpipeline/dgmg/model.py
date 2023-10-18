@@ -29,7 +29,7 @@ class ConditionVec(nn.Module):
         import os
         import torch
         import torch.nn as nn
-        
+
         self.conditioning_vector = None
         self.init_conditioning_vector(file_name)
 
@@ -51,7 +51,8 @@ class ConditionVec(nn.Module):
         lstm_hidden_units = 64  # Adjust as needed
         exterior_walls_input_size = exterior_walls_sequence[0].size()[0]
         connections_corners_input_size = (
-            connections_corners[0].size()[0] + corner_type_edge_features[0].size()[0]
+            connections_corners[0].size()[0] +
+            corner_type_edge_features[0].size()[0]
         )
         connections_rooms_input_size = connections_rooms[0].size()[0]
         # Sequence encoders
@@ -67,17 +68,19 @@ class ConditionVec(nn.Module):
 
         # Encode the sequences
         # walls
-        exterior_walls_encoded = self.exterior_walls_encoder(exterior_walls_sequence)
+        exterior_walls_encoded = self.exterior_walls_encoder(
+            exterior_walls_sequence)
         # corners
         connections_corners_encoded = self.connections_corners_encoder(
             torch.cat(
-                [connections_corners.type(torch.float32), corner_type_edge_features],
+                [connections_corners.type(
+                    torch.float16), corner_type_edge_features],
                 dim=1,
             )
         )
         # rooms
         connections_rooms_encoded = self.connections_rooms_encoder(
-            connections_rooms.type(torch.float32)
+            connections_rooms.type(torch.float16)
         )
 
         # Concatenate the vectors
@@ -109,17 +112,19 @@ class ConditionVec(nn.Module):
 
         # Encode the sequences
         # walls
-        exterior_walls_encoded = self.exterior_walls_encoder(exterior_walls_sequence)
+        exterior_walls_encoded = self.exterior_walls_encoder(
+            exterior_walls_sequence)
         # corners
         connections_corners_encoded = self.connections_corners_encoder(
             torch.cat(
-                [connections_corners.type(torch.float32), corner_type_edge_features],
+                [connections_corners.type(
+                    torch.float16), corner_type_edge_features],
                 dim=1,
             )
         )
         # rooms
         connections_rooms_encoded = self.connections_rooms_encoder(
-            connections_rooms.type(torch.float32)
+            connections_rooms.type(torch.float16)
         )
 
         # Concatenate the vectors
@@ -133,6 +138,7 @@ class ConditionVec(nn.Module):
             dim=0,
         )[None, :]
 
+
 class GraphEmbed(nn.Module):
     def __init__(self, node_hidden_size):
         super(GraphEmbed, self).__init__()
@@ -141,8 +147,10 @@ class GraphEmbed(nn.Module):
         self.graph_hidden_size = 2 * node_hidden_size
 
         # Embed graphs
-        self.node_gating = nn.Sequential(nn.Linear(node_hidden_size, 1), nn.Sigmoid())
-        self.node_to_graph = nn.Linear(node_hidden_size, self.graph_hidden_size)
+        self.node_gating = nn.Sequential(
+            nn.Linear(node_hidden_size, 1), nn.Sigmoid())
+        self.node_to_graph = nn.Linear(
+            node_hidden_size, self.graph_hidden_size)
 
     def forward(self, g):
         if g.num_nodes() == 0:
@@ -193,13 +201,15 @@ class GraphProp(nn.Module):
         self.node_update_funcs = nn.ModuleList(node_update_funcs)
 
         # A bit dodgy but we'll create a list of canonical edge types here
-        self.canonical_edge_types = [("exterior_wall", "corner_edge", "exterior_wall")]
+        self.canonical_edge_types = [
+            ("exterior_wall", "corner_edge", "exterior_wall")]
         sub_etypes = etypes.copy()
         sub_etypes.remove("corner_edge")
         for etype in sub_etypes:
             for src_ntype in ntypes:
                 for dest_ntype in ntypes:
-                    self.canonical_edge_types.append((src_ntype, etype, dest_ntype))
+                    self.canonical_edge_types.append(
+                        (src_ntype, etype, dest_ntype))
 
         self.etype_mr_dicts = []
         for t in range(self.num_prop_rounds):
@@ -220,7 +230,8 @@ class GraphProp(nn.Module):
     def dgmg_reduce(self, nodes, round):
         hv_old = nodes.data["hv"]
         m = nodes.mailbox["m"]
-        message = torch.cat([hv_old.unsqueeze(1).expand(-1, m.size(1), -1), m], dim=2)
+        message = torch.cat(
+            [hv_old.unsqueeze(1).expand(-1, m.size(1), -1), m], dim=2)
         node_activation = (self.message_funcs[round](message)).sum(1)
 
         return {"a": node_activation}
@@ -278,7 +289,8 @@ class AddNode(nn.Module):
         self.conditioning_vector = conditioning_vector
 
         self.stop = "stop"  # n_node_types
-        self.add_node = nn.Linear(graph_embed_func.graph_hidden_size, n_node_types + 1)
+        self.add_node = nn.Linear(
+            graph_embed_func.graph_hidden_size, n_node_types + 1)
 
         # If to add a node, initialize its hv
         # ALEX number of embeddings should be number of node types.
@@ -329,7 +341,8 @@ class AddNode(nn.Module):
 
         if not self.training:
             # ALEX-TODO: Need to somehow sample features.
-            action = ["dummy_node_type", torch.tensor(self.node_features_size * [-99])]
+            action = ["dummy_node_type", torch.tensor(
+                self.node_features_size * [-99])]
             sample = Categorical(probs).sample().item()
             if sample < len(self.ntypes):
                 action[0] = self.ntypes[sample]
@@ -344,10 +357,11 @@ class AddNode(nn.Module):
 
         if self.training:
             if action[0] == self.stop:
-                sample_log_prob = F.log_softmax(logits, dim=1)[:, -1].reshape(1, -1)
+                sample_log_prob = F.log_softmax(logits, dim=1)[
+                    :, -1].reshape(1, -1)
             else:
                 sample_log_prob = F.log_softmax(logits, dim=1)[
-                    :, self.ntypes.index(action[0]) : self.ntypes.index(action[0]) + 1
+                    :, self.ntypes.index(action[0]): self.ntypes.index(action[0]) + 1
                 ]
             self.log_prob.append(sample_log_prob)
 
@@ -456,7 +470,8 @@ class ChooseDestAndUpdate(nn.Module):
         )
 
     def _initialize_edge_repr(self, g, src_embed, dest_embed):
-        e_input = torch.cat([src_embed, dest_embed, self.graph_op["embed"](g)], dim=1)
+        e_input = torch.cat(
+            [src_embed, dest_embed, self.graph_op["embed"](g)], dim=1)
 
         feature_logits, pred_edge_features_u2v = self.predict_features(e_input)
         pred_edge_features_v2u = pred_edge_features_u2v
@@ -494,27 +509,42 @@ class ChooseDestAndUpdate(nn.Module):
         # Create mapping from chosen "dest_id" back to real dest id/type
         mapping = [[], []]
         reference_list = []  # to determine corresponding index for ground truth
-        # import time
-        # [print(f"key_ntypes: {key}") for key in g.ntypes]
-        # [print(f"key_ndata: {key}") for key in g.ndata['hv']]
-        # time.sleep(20)
+
         for key in g.ndata["hv"]:
-            if key == src_type:
-                reference_list += [(key, idx) for idx in range(g.num_nodes(key) - 1)]
-                mapping[0] = mapping[0] + list(range(g.num_nodes(key) - 1))
-                mapping[1] = mapping[1] + (g.num_nodes(key) - 1) * [key]
-                possible_dests_embed = torch.cat(
-                    (possible_dests_embed, g.ndata["hv"][key][0:-1]), dim=0
-                )
-            else:
-                reference_list += [(key, idx) for idx in range(g.num_nodes(key))]
-                mapping[0] = mapping[0] + list(range(g.num_nodes(key)))
-                mapping[1] = mapping[1] + g.num_nodes(key) * [key]
-                possible_dests_embed = torch.cat(
-                    (possible_dests_embed, g.ndata["hv"][key]), dim=0
-                )
+            reference_list += [(key, idx)
+                                for idx in range(g.num_nodes(key))]
+            mapping[0] = mapping[0] + list(range(g.num_nodes(key)))
+            mapping[1] = mapping[1] + g.num_nodes(key) * [key]
+            possible_dests_embed = torch.cat(
+                (possible_dests_embed, g.ndata["hv"][key]), dim=0
+            )
+        # remove the src node information from reference_list, mapping, and possible_dests_embed
+        list_index_src_node = reference_list.index((src_type, src_id))
+        reference_list.pop(list_index_src_node)
+        mapping[0].pop(list_index_src_node)
+        mapping[1].pop(list_index_src_node)
+        possible_dests_embed = torch.cat((possible_dests_embed[:list_index_src_node], possible_dests_embed[list_index_src_node+1:]))
+
+        # for key in g.ndata["hv"]:
+        #     if key == src_type:
+        #         reference_list += [(key, idx)
+        #                            for idx in range(g.num_nodes(key) - 1)]
+        #         mapping[0] = mapping[0] + list(range(g.num_nodes(key) - 1))
+        #         mapping[1] = mapping[1] + (g.num_nodes(key) - 1) * [key]
+        #         possible_dests_embed = torch.cat(
+        #             (possible_dests_embed, g.ndata["hv"][key][0:-1]), dim=0
+        #         )
+        #     else:
+        #         reference_list += [(key, idx)
+        #                            for idx in range(g.num_nodes(key))]
+        #         mapping[0] = mapping[0] + list(range(g.num_nodes(key)))
+        #         mapping[1] = mapping[1] + g.num_nodes(key) * [key]
+        #         possible_dests_embed = torch.cat(
+        #             (possible_dests_embed, g.ndata["hv"][key]), dim=0
+        #         )
         assert src_embed_expand.shape == possible_dests_embed.shape, "wrong..."
-        assert len(mapping[0]) == (g.num_nodes() - 1), "Should be 1 less than num_nodes"
+        assert len(mapping[0]) == (g.num_nodes() -
+                                   1), "Should be 1 less than num_nodes"
         assert len(reference_list) == (
             g.num_nodes() - 1
         ), "Should be 1 less than num_nodes"
@@ -545,7 +575,8 @@ class ChooseDestAndUpdate(nn.Module):
             elif a_1_1 == 8:
                 edge_features_v2u = action[1]
             else:
-                raise ValueError("Direction feature is wrong. Should be in range(9)")
+                raise ValueError(
+                    "Direction feature is wrong. Should be in range(9)")
             # Determine the id of dests_scores for GT to calc loss
             gt_idx = reference_list.index((dest_type, dest_id))
             dest_hv = possible_dests_embed[gt_idx]
@@ -576,7 +607,8 @@ class ChooseDestAndUpdate(nn.Module):
             src_id, dest_id, etype=(src_type, "room_adjacency_edge", dest_type)
         ):
             if not g.has_edges_between(
-                dest_id, src_id, etype=(dest_type, "room_adjacency_edge", src_type)
+                dest_id, src_id, etype=(
+                    dest_type, "room_adjacency_edge", src_type)
             ):
                 # For undirected graphs, we add edges for both directions
                 # so that we can perform graph propagation.\
@@ -601,7 +633,7 @@ class ChooseDestAndUpdate(nn.Module):
         if self.training:
             if dests_probs.nelement() > 1:
                 self.log_prob.append(
-                    F.log_softmax(dests_scores, dim=1)[:, gt_idx : gt_idx + 1]
+                    F.log_softmax(dests_scores, dim=1)[:, gt_idx: gt_idx + 1]
                 )
             feature_loss = self.calc_feature_loss(
                 feature_logits, action[1].type(torch.LongTensor).flatten()
@@ -647,18 +679,18 @@ class apply_partial_graph_input_completion(nn.Module):
             for ntype in g.ntypes:
                 num_nids = g.num_nodes(ntype)
                 g.nodes[ntype].data["hv"] = torch.zeros(
-                    num_nids, self.node_hidden_size, dtype=torch.float32
+                    num_nids, self.node_hidden_size, dtype=torch.float16
                 )
                 g.nodes[ntype].data["a"] = torch.zeros(
-                    num_nids, 2 * self.node_hidden_size, dtype=torch.float32
+                    num_nids, 2 * self.node_hidden_size, dtype=torch.float16
                 )
                 # No node features at this time
-                # g.nodes[ntype].data['hf'] = torch.zeros(num_nids, 2 * self.node_features_size, dtype=torch.float32)
+                # g.nodes[ntype].data['hf'] = torch.zeros(num_nids, 2 * self.node_features_size, dtype=torch.float16)
 
             for etype in self.canonical_edge_types:
                 num_eids = g.num_edges(etype)
                 g.edges[etype].data["e"] = torch.zeros(
-                    num_eids, edge_feature_size, dtype=torch.float32
+                    num_eids, edge_feature_size, dtype=torch.float16
                 )
 
         graph_data = {}
@@ -697,7 +729,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 exterior_walls_features[0].append(wall_length)
                 exterior_walls_features[1].append(wall[-1])
             exterior_walls_features = torch.tensor(
-                exterior_walls_features, dtype=torch.float32
+                exterior_walls_features, dtype=torch.float16
             ).reshape(-1, 2)
         elif exterior_walls_input_size == 3:
             exterior_walls_features = exterior_walls_sequence[:, 1:]
@@ -755,7 +787,7 @@ class apply_partial_graph_input_completion(nn.Module):
             self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
-                data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                data={"e": torch.tensor([e_feat], dtype=torch.float16)},
                 etype=etype,
             )
             # Add reverse edge
@@ -770,7 +802,7 @@ class apply_partial_graph_input_completion(nn.Module):
                     v=connection[1].item(),
                     data={
                         "e": torch.tensor(
-                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
+                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float16
                         )
                     },
                     etype=etype,
@@ -779,11 +811,12 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                    data={"e": torch.tensor([e_feat], dtype=torch.float16)},
                     etype=etype,
                 )
             else:
-                raise ValueError("Direction feature is wrong. Should be in range(9)")
+                raise ValueError(
+                    "Direction feature is wrong. Should be in range(9)")
 
         # Add in wall-node features
         self.g.nodes["exterior_wall"].data["hf"] = exterior_walls_features
@@ -826,14 +859,13 @@ class DGMG(nn.Module):
         self.v_max = v_max
         self.room_types = room_types
         self.edge_types = edge_types
-        self.user_input_path=user_input_path
+        self.user_input_path = user_input_path
         # self.room_type_dict = {}
         # self.room_type_dict = {}
         # for idx, rt in enumerate(room_types):
         #     self.room_type_dict[rt] = idx
         # for idx, et in enumerate(edge_types):
         #     self.room_type_dict[et] = idx
-
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -857,9 +889,10 @@ class DGMG(nn.Module):
         # Data to finalize
 
         # Graph conditioning vector
-        self.conditioning_vector_module = ConditionVec(file_name = self.user_input_path)
+        self.conditioning_vector_module = ConditionVec(
+            file_name=self.user_input_path)
         self.conditioning_vector = self.conditioning_vector_module.conditioning_vector
-        
+
         # Actions
         self.add_node_agent = AddNode(
             self.graph_embed,
@@ -934,7 +967,7 @@ class DGMG(nn.Module):
         """Choose destination and connect it to the latest node.
         Add edges for both directions and update the graph."""
 
-        self.choose_dest_agent(self.g, a, src_type=src_type, src_id=None)
+        self.choose_dest_agent(self.g, a, src_type=src_type, src_id=src_id)
 
     def get_log_prob(self):
         an_sum = 0
@@ -955,11 +988,15 @@ class DGMG(nn.Module):
     #     return ConditionVec(file_name=file_path).conditioning_vector
 
     def forward_train(self, actions):
+        while True:
+            act = actions[self.action_step]
+            if act[0] == 0:
+                break
         # Again, "actions" = "decision sequence"
         # In order to have node/edge types and node/edge features,
         # we will use a decision sequence that is formatted as so:
         stop, last_added_node_type = self.add_node_and_update(
-            a=actions[self.action_step][1:]
+            a=act[1:]
         )
 
         while not stop:
@@ -991,7 +1028,8 @@ class DGMG(nn.Module):
             while to_add_edge and (num_trials < self.g.num_nodes() - 1):
                 self.choose_dest_and_update(src_type=last_added_node_type)
                 num_trials += 1
-                to_add_edge = self.add_edge_or_not(src_type=last_added_node_type)
+                to_add_edge = self.add_edge_or_not(
+                    src_type=last_added_node_type)
             stop, last_added_node_type = self.add_node_and_update()
 
         return self.g
@@ -999,10 +1037,11 @@ class DGMG(nn.Module):
     def forward(self, init_actions=None, actions=None):
         # The graph we will work on
         self.g = self.partial_graph_agent(self.user_input_path)
-        
+
         # Add a list of canonical_etypes for use by Graph prop...
-        self.graph_prop.canonical_etypes = [cet for cet in self.g.canonical_etypes]
-        
+        self.graph_prop.canonical_etypes = [
+            cet for cet in self.g.canonical_etypes]
+
         # Right now, the nodes do not have 'hv' or 'a' features.
         # Would like to initialize these features for all added nodes in the partial graph
         # We use the AddNode agent nn's to do this.
@@ -1043,7 +1082,8 @@ class DGMG(nn.Module):
                         torch.cat(
                             [
                                 self.add_node_agent.node_type_embed(
-                                    torch.LongTensor([self.room_types.index(ntype)])
+                                    torch.LongTensor(
+                                        [self.room_types.index(ntype)])
                                 ),
                                 graph_embed,
                                 # node_features, #ALEX-TODO: Uncomment as needed
@@ -1054,6 +1094,14 @@ class DGMG(nn.Module):
                     )
 
     def finalize_partial_graph_train(self, init_actions):
+        with open("./ALEX/see_order.txt", "a") as file:
+            file.write("\n****NEW HOUSE****")
+            for ntype in self.g.ntypes:
+                if ntype == "exterior_wall":
+                    continue
+                if self.g.num_nodes(ntype) > 0:
+                    for node_id in range(self.g.num_nodes(ntype)):
+                        file.write("\n"+str(ntype)+" "+str(node_id))
         for ntype in self.g.ntypes:
             if ntype == "exterior_wall":
                 continue
@@ -1081,6 +1129,7 @@ class DGMG(nn.Module):
                     num_trials = 0
                     to_add_edge = self.add_edge_or_not(src_type=ntype)
                     while to_add_edge and (num_trials < self.g.num_nodes() - 1):
-                        self.choose_dest_and_update(src_type=ntype, src_id=node_id)
+                        self.choose_dest_and_update(
+                            src_type=ntype, src_id=node_id)
                         num_trials += 1
                         to_add_edge = self.add_edge_or_not(src_type=ntype)

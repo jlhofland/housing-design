@@ -183,7 +183,7 @@ torch.onnx.export(generator.float(),               # model being run
 # ort_session = onnxruntime.InferenceSession("houseganpp.onnx")
 
 # def to_numpy(tensor):
-#     return tensor.detach().cpu().numpy().astype('float32') if tensor.requires_grad else tensor.cpu().numpy().astype('float32')
+#     return tensor.detach().cpu().numpy().astype('float16') if tensor.requires_grad else tensor.cpu().numpy().astype('float16')
 
 # # Run pytorch
 # torch_out = generator(z, given_masks_in, given_nds, given_eds)

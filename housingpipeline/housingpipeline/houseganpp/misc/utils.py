@@ -140,8 +140,8 @@ def selectNodesTypes(nd_to_sample, batch_size, nds):
 
 
 def fix_nodes(prev_mks, ind_fixed_nodes):
-    # given_masks = torch.tensor(prev_mks)
-    given_masks = prev_mks.clone().detach()
+    given_masks = torch.tensor(prev_mks)
+    # given_masks = prev_mks.clone().detach()
     ind_not_fixed_nodes = torch.tensor(
         [k for k in range(given_masks.shape[0]) if k not in ind_fixed_nodes]
     )
@@ -161,8 +161,8 @@ def _init_input(graph, prev_state=None, mask_size=64):
     # initialize graph
     given_nds, given_eds, given_eds_f = graph
     given_nds = given_nds.float()
-    # given_eds = torch.tensor(given_eds).long()
-    given_eds = given_eds.clone().detach().long()
+    given_eds = torch.tensor(given_eds).long()
+    # given_eds = given_eds.clone().detach().long()
     given_eds_f = given_eds_f.float()
 
     z = torch.randn(len(given_nds), 128).float()
@@ -174,8 +174,13 @@ def _init_input(graph, prev_state=None, mask_size=64):
         else prev_state["masks"]
     )
     # initialize masks
-    # given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
-    given_masks_in = fix_nodes(prev_mks, fixed_nodes.clone().detach())
+    given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
+    # if type(fixed_nodes) is list:
+    #     given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
+    # elif type(fixed_nodes) is np.ndarray:
+    #     given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
+    # else:
+    #     given_masks_in = fix_nodes(prev_mks, fixed_nodes.clone().detach())
     return z, given_masks_in, given_nds, given_eds, given_eds_f
 
 
