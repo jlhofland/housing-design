@@ -8,3 +8,7 @@ housingpipeline/housingpipeline/housegan_clean_data.npy
 *.vscode*
 housingpipeline/housingpipeline/houseganpp/HGPP/*
 results/
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_eval_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_test_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\housegan_clean_data.npy
