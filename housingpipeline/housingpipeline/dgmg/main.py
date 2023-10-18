@@ -54,8 +54,6 @@ def main(opts):
             v_max=opts["max_size"],
             node_hidden_size=opts["node_hidden_size"],
             num_prop_rounds=opts["num_propagation_rounds"],
-            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-            # zero for now, no node features
             node_features_size=opts["node_features_size"],
             num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
             room_types=opts["room_types"],
@@ -63,7 +61,9 @@ def main(opts):
             gen_houses_dataset_only=opts["gen_data"],
             user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
         )
-        # model = model.cuda()
+        # if torch.cuda.is_available():
+        #     device = torch.device("cuda:0")
+        # model.to(device)
 
         # Initialize optimizer
         if opts["optimizer"] == "Adam":
@@ -149,6 +149,7 @@ def main(opts):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
+                        torch.save(model.state_dict(), "./checkpoints/dgmg_model_batch_"+str(batch_number)+".pth")
 
         t3 = time.time()
 

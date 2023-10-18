@@ -35,11 +35,10 @@ import time
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_cpu", type=int, default=16, help="number of cpu threads to use during batch generation")
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
-parser.add_argument("--checkpoint", type=str, default='./checkpoints/pretrained.pth', help="checkpoint path")
-parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets", help="path to dataset list file")
+parser.add_argument("--checkpoint", type=str, default='/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/exp_D_9.pth', help="checkpoint path")
+parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets", help="path to dataset list file")
 parser.add_argument("--out", type=str, default='./dump', help="output folder")
 opt = parser.parse_args()
-print(opt)
 
 # Create output dir
 os.makedirs(opt.out, exist_ok=True)
@@ -70,7 +69,6 @@ def _infer(graph, model, prev_state=None):
     with torch.no_grad():
         if torch.cuda.is_available():
             masks = model(z.to('cuda'), given_masks_in.to('cuda'), given_nds.to('cuda'), given_eds.to('cuda'), given_eds_f.to('cuda'))
-            print(len(masks))
         else:
             masks = model(z, given_masks_in, given_nds, given_eds, given_eds_f)
         masks = masks.detach().cpu().numpy()
@@ -81,7 +79,13 @@ def main():
     for i, sample in enumerate(fp_loader):
         print("getting here")
         # draw real graph and groundtruth
-        mks, nds, eds, _, _, eds_f = sample
+        mks, nds, eds, eds_f, _, _ = sample
+        # graph_sample = [mks, nds, eds, eds_f]
+        # import pickle
+        # import time
+        # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "wb") as file:
+        #     pickle.dump(graph_sample, file)
+        # time.sleep(20)
         real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] # Add the [:,:-2] to cut off the node features and leave the node types
         graph = [nds, eds, eds_f]
         true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])
@@ -96,7 +100,7 @@ def main():
         # initialize layout
         state = {'masks': None, 'fixed_nodes': []}
         masks = _infer(graph, model, state)
-        im0 = draw_masks(masks.copy(), real_nodes)
+        im0 = draw_masks(masks.copy(), nds.numpy())
         im0 = torch.tensor(np.array(im0).transpose((2, 0, 1)))/255.0 
         # save_image(im0, './{}/fp_init_{}.png'.format(opt.out, i), nrow=1, normalize=False) # visualize init image
 
@@ -110,7 +114,7 @@ def main():
             masks = _infer(graph, model, state)
             
         # save final floorplans
-        imk = draw_masks(masks.copy(), real_nodes)
+        imk = draw_masks(masks.copy(), nds.numpy())
         imk = torch.tensor(np.array(imk).transpose((2, 0, 1)))/255.0 
         save_image(imk, './{}/fp_final_{}.png'.format(opt.out, i), nrow=1, normalize=False)
         

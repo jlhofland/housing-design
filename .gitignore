@@ -8,3 +8,5 @@ housingpipeline/housingpipeline/housegan_clean_data.npy
 *.vscode*
 housingpipeline/housingpipeline/houseganpp/HGPP/*
 results/
+housingpipeline/housingpipeline/dgmg/checkpoints/
+housingpipeline/housingpipeline/floor_plan_pipeline/pipeline_output/

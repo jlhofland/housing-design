@@ -95,16 +95,16 @@ adversarial_loss.to(device)
 
 
 # Visualize a single batch
-def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_size=8):
+def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done, batch_size=8):
     print(
         "Loading saved model ... \n{}".format(
             "./checkpoints/{}_{}.pth".format(exp_folder, batches_done)
         )
     )
-    generatorTest = Generator()
-    generatorTest.load_state_dict(
-        torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
-    )
+    generatorTest = generator
+    # generatorTest.load_state_dict(
+    #     torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+    # )
     generatorTest = generatorTest.eval()
 
     if torch.cuda.is_available():
@@ -155,6 +155,7 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
             nrow=12,
             normalize=False,
         )
+        generatorTest.train()
     return
 
 
@@ -183,7 +184,7 @@ fp_dataset_test = FloorplanGraphDataset(
 
 fp_loader_test = torch.utils.data.DataLoader(
     fp_dataset_test,
-    batch_size=8,
+    batch_size=4,
     shuffle=False,
     num_workers=opt.n_cpu,
     collate_fn=floorplan_collate_fn,
@@ -323,7 +324,7 @@ for epoch in range(opt.n_epochs):
                     generator.state_dict(),
                     "./checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
-                visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done)
+                visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
             batches_done += opt.n_critic
 
 
