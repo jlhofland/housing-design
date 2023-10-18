@@ -39,7 +39,6 @@ parser.add_argument("--checkpoint", type=str, default='/home/evalexii/Documents/
 parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets", help="path to dataset list file")
 parser.add_argument("--out", type=str, default='./dump', help="output folder")
 opt = parser.parse_args()
-print(opt)
 
 # Create output dir
 os.makedirs(opt.out, exist_ok=True)
@@ -70,7 +69,6 @@ def _infer(graph, model, prev_state=None):
     with torch.no_grad():
         if torch.cuda.is_available():
             masks = model(z.to('cuda'), given_masks_in.to('cuda'), given_nds.to('cuda'), given_eds.to('cuda'), given_eds_f.to('cuda'))
-            print(len(masks))
         else:
             masks = model(z, given_masks_in, given_nds, given_eds, given_eds_f)
         masks = masks.detach().cpu().numpy()
@@ -82,6 +80,12 @@ def main():
         print("getting here")
         # draw real graph and groundtruth
         mks, nds, eds, eds_f, _, _ = sample
+        # graph_sample = [mks, nds, eds, eds_f]
+        # import pickle
+        # import time
+        # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "wb") as file:
+        #     pickle.dump(graph_sample, file)
+        # time.sleep(20)
         real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] # Add the [:,:-2] to cut off the node features and leave the node types
         graph = [nds, eds, eds_f]
         true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])

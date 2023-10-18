@@ -74,13 +74,13 @@ class ConditionVec(nn.Module):
         connections_corners_encoded = self.connections_corners_encoder(
             torch.cat(
                 [connections_corners.type(
-                    torch.float16), corner_type_edge_features],
+                    torch.float32), corner_type_edge_features],
                 dim=1,
             )
         )
         # rooms
         connections_rooms_encoded = self.connections_rooms_encoder(
-            connections_rooms.type(torch.float16)
+            connections_rooms.type(torch.float32)
         )
 
         # Concatenate the vectors
@@ -118,13 +118,13 @@ class ConditionVec(nn.Module):
         connections_corners_encoded = self.connections_corners_encoder(
             torch.cat(
                 [connections_corners.type(
-                    torch.float16), corner_type_edge_features],
+                    torch.float32), corner_type_edge_features],
                 dim=1,
             )
         )
         # rooms
         connections_rooms_encoded = self.connections_rooms_encoder(
-            connections_rooms.type(torch.float16)
+            connections_rooms.type(torch.float32)
         )
 
         # Concatenate the vectors
@@ -679,18 +679,18 @@ class apply_partial_graph_input_completion(nn.Module):
             for ntype in g.ntypes:
                 num_nids = g.num_nodes(ntype)
                 g.nodes[ntype].data["hv"] = torch.zeros(
-                    num_nids, self.node_hidden_size, dtype=torch.float16
+                    num_nids, self.node_hidden_size, dtype=torch.float32
                 )
                 g.nodes[ntype].data["a"] = torch.zeros(
-                    num_nids, 2 * self.node_hidden_size, dtype=torch.float16
+                    num_nids, 2 * self.node_hidden_size, dtype=torch.float32
                 )
                 # No node features at this time
-                # g.nodes[ntype].data['hf'] = torch.zeros(num_nids, 2 * self.node_features_size, dtype=torch.float16)
+                # g.nodes[ntype].data['hf'] = torch.zeros(num_nids, 2 * self.node_features_size, dtype=torch.float32)
 
             for etype in self.canonical_edge_types:
                 num_eids = g.num_edges(etype)
                 g.edges[etype].data["e"] = torch.zeros(
-                    num_eids, edge_feature_size, dtype=torch.float16
+                    num_eids, edge_feature_size, dtype=torch.float32
                 )
 
         graph_data = {}
@@ -729,7 +729,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 exterior_walls_features[0].append(wall_length)
                 exterior_walls_features[1].append(wall[-1])
             exterior_walls_features = torch.tensor(
-                exterior_walls_features, dtype=torch.float16
+                exterior_walls_features, dtype=torch.float32
             ).reshape(-1, 2)
         elif exterior_walls_input_size == 3:
             exterior_walls_features = exterior_walls_sequence[:, 1:]
@@ -787,7 +787,7 @@ class apply_partial_graph_input_completion(nn.Module):
             self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
-                data={"e": torch.tensor([e_feat], dtype=torch.float16)},
+                data={"e": torch.tensor([e_feat], dtype=torch.float32)},
                 etype=etype,
             )
             # Add reverse edge
@@ -802,7 +802,7 @@ class apply_partial_graph_input_completion(nn.Module):
                     v=connection[1].item(),
                     data={
                         "e": torch.tensor(
-                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float16
+                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
                         )
                     },
                     etype=etype,
@@ -811,7 +811,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={"e": torch.tensor([e_feat], dtype=torch.float16)},
+                    data={"e": torch.tensor([e_feat], dtype=torch.float32)},
                     etype=etype,
                 )
             else:

@@ -54,8 +54,6 @@ def main(opts):
             v_max=opts["max_size"],
             node_hidden_size=opts["node_hidden_size"],
             num_prop_rounds=opts["num_propagation_rounds"],
-            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-            # zero for now, no node features
             node_features_size=opts["node_features_size"],
             num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
             room_types=opts["room_types"],
@@ -63,7 +61,9 @@ def main(opts):
             gen_houses_dataset_only=opts["gen_data"],
             user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
         )
-        # model = model.cuda()
+        # if torch.cuda.is_available():
+        #     device = torch.device("cuda:0")
+        # model.to(device)
 
         # Initialize optimizer
         if opts["optimizer"] == "Adam":
@@ -149,7 +149,7 @@ def main(opts):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
-                torch.save(model.state_dict(), "./checkpoints/dgmg_model_epoch_"+str(epoch)+".pth")
+                        torch.save(model.state_dict(), "./checkpoints/dgmg_model_batch_"+str(batch_number)+".pth")
 
         t3 = time.time()
 
@@ -238,17 +238,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/testing/user_inputs_new_ids/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",

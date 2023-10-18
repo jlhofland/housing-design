@@ -30,8 +30,6 @@ def create_graph_from_user_input(user_input_path=None, model_path=None):
         v_max=dgmg_opts["max_size"],
         node_hidden_size=dgmg_opts["node_hidden_size"],
         num_prop_rounds=dgmg_opts["num_propagation_rounds"],
-        # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-        # zero for now, no node features
         node_features_size=dgmg_opts["node_features_size"],
         num_edge_feature_classes_list=dgmg_opts["num_edge_feature_classes_list"],
         room_types=dgmg_opts["room_types"],
@@ -42,7 +40,7 @@ def create_graph_from_user_input(user_input_path=None, model_path=None):
     model.load_state_dict(torch.load(model_path))
     model.eval()
 
-    pipeline_graph = evaluator.generate_single_valid_graph(user_input_path=user_input_path, model=model)
+    pipeline_graph = evaluator.generate_single_valid_graph(model=model)
     t2 = time.time()
     print(
         "It took {} to finish evaluation.".format(

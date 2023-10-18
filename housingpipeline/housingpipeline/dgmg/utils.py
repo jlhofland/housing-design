@@ -124,7 +124,7 @@ def parse_input_json(file_path):
         layout = json.load(openfile)
 
     # Manually parse numerical/boolean data into tensor
-    room_number_data = torch.zeros(6, dtype=torch.float16)
+    room_number_data = torch.zeros(6, dtype=torch.float32)
     room_number_data[0] = layout["number_of_living_rooms"]
     room_number_data[1] = int(layout["living_rooms_plus?"])
     room_number_data[2] = layout["number_of_bedrooms"]
@@ -133,7 +133,7 @@ def parse_input_json(file_path):
     room_number_data[5] = int(layout["bathrooms_plus?"])
 
     # Parse walls / connections into tensors
-    exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float16)
+    exterior_walls_sequence = torch.tensor(layout["exterior_walls"], dtype=torch.float32)
     connections_corners = torch.LongTensor(layout["connections_corners"])[:, 0:4]
         # Add reverse corner edges
     num_corners = connections_corners.shape[0]
@@ -141,7 +141,7 @@ def parse_input_json(file_path):
     connections_corners[num_corners:, [1,3]] = connections_corners[num_corners:, [3,1]]
     connections_rooms = torch.LongTensor(layout["connections_rooms"])
         # Adding bi-directional corner edges (one for CW and one for CCW edges)
-    corner_type_edge_features_cw = torch.tensor(layout["connections_corners"], dtype=torch.float16)[:, 4:].reshape(-1,2)
+    corner_type_edge_features_cw = torch.tensor(layout["connections_corners"], dtype=torch.float32)[:, 4:].reshape(-1,2)
     corner_type_edge_features_ccw = corner_type_edge_features_cw.clone()
     corner_type_edge_features_ccw[:,0] = -corner_type_edge_features_ccw[:,0]
     corner_type_edge_features = torch.cat([corner_type_edge_features_cw, corner_type_edge_features_ccw], dim=0)

@@ -22,7 +22,7 @@ def parse_input_json(file_path):
     # Parse walls / connections into tensors
     exterior_walls_sequence = torch.LongTensor(layout["exterior_walls"])
     connections_corners = torch.LongTensor(layout["connections_corners"])[:, 0:4]
-    corner_type_edge_features = torch.tensor(layout["connections_corners"], dtype=torch.float16)[:, 4].reshape(-1,1)
+    corner_type_edge_features = torch.tensor(layout["connections_corners"], dtype=torch.float32)[:, 4].reshape(-1,1)
     connections_rooms = torch.LongTensor(layout["connections_rooms"])
 
     return room_number_data, exterior_walls_sequence, connections_corners, connections_rooms, corner_type_edge_features
@@ -79,8 +79,8 @@ def apply_partial_graph_input_completion_old(file_path):
             wall_end = wall[2:4] 
             wall_length = np.linalg.norm(wall_end - wall_start)
             exterior_walls_features.append(wall_length)
-        exterior_walls_features = torch.tensor(exterior_walls_features, dtype=torch.float16).reshape(-1,1)
-        # corner_type_edge_features = torch.tensor(connections_corners_sequence[:,4].reshape(-1,1).clone().detach(), dtype=torch.float16)
+        exterior_walls_features = torch.tensor(exterior_walls_features, dtype=torch.float32).reshape(-1,1)
+        # corner_type_edge_features = torch.tensor(connections_corners_sequence[:,4].reshape(-1,1).clone().detach(), dtype=torch.float32)
         
         # Extract room nodes and room_adjacency_edge features
         room_adjacency_type_edge_features = connections_rooms_sequence[:,4:]
@@ -168,8 +168,8 @@ def apply_partial_graph_input_completion(file_path, node_hidden_size=16):
             wall_end = wall[2:4] 
             wall_length = np.linalg.norm(wall_end - wall_start)
             exterior_walls_features.append(wall_length)
-        exterior_walls_features = torch.tensor(exterior_walls_features, dtype=torch.float16).reshape(-1,1)
-        # corner_type_edge_features = torch.tensor(connections_corners_sequence[:,4].reshape(-1,1).clone().detach(), dtype=torch.float16)
+        exterior_walls_features = torch.tensor(exterior_walls_features, dtype=torch.float32).reshape(-1,1)
+        # corner_type_edge_features = torch.tensor(connections_corners_sequence[:,4].reshape(-1,1).clone().detach(), dtype=torch.float32)
         
         # Extract room nodes and room_adjacency_edge features
         room_adjacency_type_edge_features = connections_rooms_sequence[:,4:]
