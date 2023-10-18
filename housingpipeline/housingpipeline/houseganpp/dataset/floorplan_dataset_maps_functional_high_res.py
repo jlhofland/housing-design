@@ -494,7 +494,7 @@ class FloorplanGraphDataset_RP(Dataset):
         return nodes, triples, rms_masks
 
 
-sets = {"A": [1, 3], "B": [4, 6], "C": [7, 9], "D": [10, 12], "E": [13, 100]}
+sets = {"A": [1, 17], "B": [18, 21], "C": [22, 24], "D": [25, 28], "E": [29, 86]}
 
 
 class FloorplanGraphDataset(Dataset):
