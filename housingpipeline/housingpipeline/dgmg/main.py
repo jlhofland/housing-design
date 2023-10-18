@@ -27,9 +27,10 @@ def main(opts):
         if opts["dataset"] == "cycles":
             raise ValueError("Cycles dataset no longer supported")
         elif opts["dataset"] == "houses":
-            from housingpipeline.dgmg.houses import HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
+            from housingpipeline.dgmg.houses import CustomDataset, HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
 
-            dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
+            dataset = CustomDataset(opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
+            # dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
             )
@@ -46,6 +47,21 @@ def main(opts):
             shuffle=False,
             num_workers=0,
             # collate_fn=dataset.collate_single,
+        )
+        
+        # Initialize_model
+        model = DGMG(
+            v_max=opts["max_size"],
+            node_hidden_size=opts["node_hidden_size"],
+            num_prop_rounds=opts["num_propagation_rounds"],
+            # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
+            # zero for now, no node features
+            node_features_size=opts["node_features_size"],
+            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+            room_types=opts["room_types"],
+            edge_types=opts["edge_types"],
+            gen_houses_dataset_only=opts["gen_data"],
+            user_input_path=user_input_path, 
         )
         # model = model.cuda()
 
@@ -87,20 +103,6 @@ def main(opts):
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    # Initialize_model
-                    model = DGMG(
-                        v_max=opts["max_size"],
-                        node_hidden_size=opts["node_hidden_size"],
-                        num_prop_rounds=opts["num_propagation_rounds"],
-                        # ALEX-TODO: may need to push this inside the AddNode/AddEdge functions..
-                        # zero for now, no node features
-                        node_features_size=opts["node_features_size"],
-                        num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
-                        room_types=opts["room_types"],
-                        edge_types=opts["edge_types"],
-                        gen_houses_dataset_only=opts["gen_data"],
-                        user_input_path=user_input_path, 
-                    )
                     if opts["gen_data"]:
                         model()
 
@@ -227,12 +229,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
