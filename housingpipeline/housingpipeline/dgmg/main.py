@@ -46,9 +46,9 @@ def main(opts):
             batch_size=1,
             shuffle=False,
             num_workers=0,
-            # collate_fn=dataset.collate_single,
+            collate_fn=dataset.collate_single,
         )
-        
+
         # Initialize_model
         model = DGMG(
             v_max=opts["max_size"],
@@ -61,7 +61,7 @@ def main(opts):
             room_types=opts["room_types"],
             edge_types=opts["edge_types"],
             gen_houses_dataset_only=opts["gen_data"],
-            user_input_path=user_input_path, 
+            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
         )
         # model = model.cuda()
 
@@ -102,6 +102,14 @@ def main(opts):
                     # here, the "actions" refer to the cycle decision sequences
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
                     # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
+
+                    # update model's user-input path
+                    model.user_input_path = user_input_path
+                    # Update model's cond vector
+                    model.conditioning_vector_module.update_conditioning_vector(user_input_path)
+                    model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
+                    # update cond vector inside the add-node agent
+                    model.add_node_agent.conditioning_vector = model.conditioning_vector
 
                     if opts["gen_data"]:
                         model()

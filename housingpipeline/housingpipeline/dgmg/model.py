@@ -25,10 +25,15 @@ class LSTMEncoder(nn.Module):
 
 class ConditionVec(nn.Module):
     def __init__(self, file_name):
+        super(ConditionVec, self).__init__()
         import os
         import torch
         import torch.nn as nn
+        
+        self.conditioning_vector = None
+        self.init_conditioning_vector(file_name)
 
+    def init_conditioning_vector(self, file_name):
         (
             room_number_data,
             exterior_walls_sequence,
@@ -50,28 +55,28 @@ class ConditionVec(nn.Module):
         )
         connections_rooms_input_size = connections_rooms[0].size()[0]
         # Sequence encoders
-        exterior_walls_encoder = LSTMEncoder(
+        self.exterior_walls_encoder = LSTMEncoder(
             input_dim=exterior_walls_input_size, hidden_dim=lstm_hidden_units
         )
-        connections_corners_encoder = LSTMEncoder(
+        self.connections_corners_encoder = LSTMEncoder(
             input_dim=connections_corners_input_size, hidden_dim=lstm_hidden_units
         )
-        connections_rooms_encoder = LSTMEncoder(
+        self.connections_rooms_encoder = LSTMEncoder(
             input_dim=connections_rooms_input_size, hidden_dim=lstm_hidden_units
         )
 
         # Encode the sequences
         # walls
-        exterior_walls_encoded = exterior_walls_encoder(exterior_walls_sequence)
+        exterior_walls_encoded = self.exterior_walls_encoder(exterior_walls_sequence)
         # corners
-        connections_corners_encoded = connections_corners_encoder(
+        connections_corners_encoded = self.connections_corners_encoder(
             torch.cat(
                 [connections_corners.type(torch.float32), corner_type_edge_features],
                 dim=1,
             )
         )
         # rooms
-        connections_rooms_encoded = connections_rooms_encoder(
+        connections_rooms_encoded = self.connections_rooms_encoder(
             connections_rooms.type(torch.float32)
         )
 
@@ -93,6 +98,40 @@ class ConditionVec(nn.Module):
         #     print(params)
         #     print(exterior_walls_encoder.state_dict()[params].shape)
 
+    def update_conditioning_vector(self, file_name):
+        (
+            room_number_data,
+            exterior_walls_sequence,
+            connections_corners,
+            connections_rooms,
+            corner_type_edge_features,
+        ) = parse_input_json(file_name)
+
+        # Encode the sequences
+        # walls
+        exterior_walls_encoded = self.exterior_walls_encoder(exterior_walls_sequence)
+        # corners
+        connections_corners_encoded = self.connections_corners_encoder(
+            torch.cat(
+                [connections_corners.type(torch.float32), corner_type_edge_features],
+                dim=1,
+            )
+        )
+        # rooms
+        connections_rooms_encoded = self.connections_rooms_encoder(
+            connections_rooms.type(torch.float32)
+        )
+
+        # Concatenate the vectors
+        self.conditioning_vector = torch.cat(
+            (
+                room_number_data,
+                exterior_walls_encoded,
+                connections_corners_encoded,
+                connections_rooms_encoded,
+            ),
+            dim=0,
+        )[None, :]
 
 class GraphEmbed(nn.Module):
     def __init__(self, node_hidden_size):
@@ -795,8 +834,6 @@ class DGMG(nn.Module):
         # for idx, et in enumerate(edge_types):
         #     self.room_type_dict[et] = idx
 
-        # Graph conditioning vector
-        self.conditioning_vector = self.init_cond_vector(self.user_input_path)
 
         # Graph embedding module
         self.graph_embed = GraphEmbed(node_hidden_size)
@@ -819,6 +856,10 @@ class DGMG(nn.Module):
         )
         # Data to finalize
 
+        # Graph conditioning vector
+        self.conditioning_vector_module = ConditionVec(file_name = self.user_input_path)
+        self.conditioning_vector = self.conditioning_vector_module.conditioning_vector
+        
         # Actions
         self.add_node_agent = AddNode(
             self.graph_embed,
@@ -910,8 +951,8 @@ class DGMG(nn.Module):
             cd_sum = torch.cat(self.choose_dest_agent.log_prob).sum()
         return an_sum + ae_sum + cd_sum
 
-    def init_cond_vector(self, file_path):
-        return ConditionVec(file_name=file_path).conditioning_vector
+    # def init_cond_vector(self, file_path):
+    #     return ConditionVec(file_name=file_path).conditioning_vector
 
     def forward_train(self, actions):
         # Again, "actions" = "decision sequence"
@@ -1014,6 +1055,8 @@ class DGMG(nn.Module):
 
     def finalize_partial_graph_train(self, init_actions):
         for ntype in self.g.ntypes:
+            if ntype == "exterior_wall":
+                continue
             if self.g.num_nodes(ntype) > 0:
                 for node_id in range(self.g.num_nodes(ntype)):
                     to_add_edge = self.add_edge_or_not(

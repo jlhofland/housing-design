@@ -116,6 +116,8 @@ def setup(args):
 
 def parse_input_json(file_path):
     import json
+    if type(file_path) is tuple:
+        file_path = file_path[0]
     # Read in input data from JSONC file, "./input.jsonc"
     with open(file_path, 'r') as openfile:
         # Reading from json file into python dict

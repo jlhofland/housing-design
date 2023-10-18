@@ -256,6 +256,12 @@ class CustomDataset(Dataset):
         complete_seq = self.complete_seq[index]
         return (user_input_path, partial_seq, complete_seq)
 
+    def collate_single(self, batch):
+        assert len(batch) == 1, "Currently we do not support batched training"
+        return batch[0]
+
+    def collate_batch(self, batch):
+        return batch
 
 class HouseDataset(Dataset):
     def __init__(self, fname):
