@@ -49,7 +49,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=100, help="interval between image sampling"
+    "--sample_interval", type=int, default=3, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -57,6 +57,12 @@ parser.add_argument(
     type=int,
     default=1,
     help="number of training steps for discriminator per iter",
+)
+parser.add_argument(
+    "--status_print_interval",
+    type=int,
+    default=100,
+    help="number of batches (of size 1..) between status prints",
 )
 parser.add_argument(
     "--target_set",
@@ -89,6 +95,8 @@ generator = Generator()
 discriminator = Discriminator()
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
 generator.to(device)
 discriminator.to(device)
 adversarial_loss.to(device)
@@ -307,18 +315,6 @@ for epoch in range(opt.n_epochs):
             g_loss.backward()
             # Update optimizer
             optimizer_G.step()
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [L1 loss: %f]"
-                % (
-                    epoch,
-                    opt.n_epochs,
-                    i,
-                    len(fp_loader),
-                    d_loss.item(),
-                    g_loss.item(),
-                    err.item(),
-                )
-            )
             if (batches_done % opt.sample_interval == 0) and batches_done:
                 torch.save(
                     generator.state_dict(),
@@ -326,6 +322,20 @@ for epoch in range(opt.n_epochs):
                 )
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
             batches_done += opt.n_critic
+            if batches_done % opt.status_print_interval == 0:
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [L1 loss: %f]"
+                    % (
+                        epoch,
+                        opt.n_epochs,
+                        batches_done,
+                        len(fp_loader),
+                        d_loss.item(),
+                        g_loss.item(),
+                        err.item(),
+                    )
+                )
+
 
 
 """def reader(filename):
