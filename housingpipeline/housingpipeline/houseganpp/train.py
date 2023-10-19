@@ -3,6 +3,7 @@ import os
 import numpy as np
 import math
 import json
+import wandb
 
 from housingpipeline.houseganpp.dataset.floorplan_dataset_maps_functional_high_res import (
     FloorplanGraphDataset,
@@ -49,7 +50,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=3, help="interval between image sampling"
+    "--sample_interval", type=int, default=10, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -61,7 +62,7 @@ parser.add_argument(
 parser.add_argument(
     "--status_print_interval",
     type=int,
-    default=100,
+    default=2,
     help="number of batches (of size 1..) between status prints",
 )
 parser.add_argument(
@@ -74,13 +75,16 @@ parser.add_argument(
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets",
+    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/full_datasets",
     help="path to the dataset",
 )
 parser.add_argument(
     "--lambda_gp", type=int, default=10, help="lambda for gradient penalty"
 )
 opt = parser.parse_args()
+
+wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
+wandb.init(project='Housing', config=vars(opt))
 
 
 exp_folder = "{}_{}".format(opt.exp_folder, opt.target_set)
@@ -163,6 +167,9 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
             nrow=12,
             normalize=False,
         )
+        wandb.log({'Real Images': [wandb.Image("./exps/{}/{}_real.png".format(exp_folder, batches_done))]})
+        wandb.log({'Generated Images': [wandb.Image("./exps/{}/{}_fake.png".format(exp_folder, batches_done))]})
+
         generatorTest.train()
     return
 
@@ -320,8 +327,8 @@ for epoch in range(opt.n_epochs):
                     generator.state_dict(),
                     "./checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
+                wandb.save("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
-            batches_done += opt.n_critic
             if batches_done % opt.status_print_interval == 0:
                 print(
                     "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [L1 loss: %f]"
@@ -335,6 +342,17 @@ for epoch in range(opt.n_epochs):
                         err.item(),
                     )
                 )
+            wandb.log({
+            'epoch': epoch,
+            'batch': batches_done,
+            'D_loss': d_loss.item(),
+            'G_loss': g_loss.item(),
+            'L1_loss': err.item()
+            })
+            batches_done += opt.n_critic
+
+wandb.finish()
+
 
 
 
