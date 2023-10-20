@@ -166,6 +166,9 @@ class GraphEmbed(nn.Module):
             # hvs = g.ndata["hv"]
             # NEW:
             hvs = torch.empty((0, 16))
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+                hvs = hvs.to(device)
             for key in g.ndata["hv"]:
                 hvs = torch.cat((hvs, g.ndata["hv"][key]), dim=0)
             return (self.node_gating(hvs) * self.node_to_graph(hvs)).sum(
@@ -317,14 +320,15 @@ class AddNode(nn.Module):
         # ALEX This function passes through a linear layer a node_embed_CAT_graph_embed to calculate an initial hv
         # ALEX Here is where we would add node features (node_features = action[1])
         # ALEX This is where we would add our conditioning vector, c
+        nt = torch.LongTensor([self.ntypes.index(action[0])])
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            nt = nt.to(device)
         hv_init = self.initialize_hv(
             torch.cat(
                 [
-                    self.node_type_embed(
-                        torch.LongTensor([self.ntypes.index(action[0])])
-                    ),
+                    self.node_type_embed(nt),
                     graph_embed,
-                    # node_features, #ALEX-TODO: Uncomment as needed
                     self.conditioning_vector,
                 ],
                 dim=1,
@@ -511,13 +515,16 @@ class ChooseDestAndUpdate(nn.Module):
             g.nodes[src_type].data["hv"][-1].expand(g.num_nodes() - 1, -1)
         )
         possible_dests_embed = torch.empty((0, 16))
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            possible_dests_embed = possible_dests_embed.to(device)
         # Create mapping from chosen "dest_id" back to real dest id/type
         mapping = [[], []]
         reference_list = []  # to determine corresponding index for ground truth
 
         for key in g.ndata["hv"]:
             reference_list += [(key, idx)
-                                for idx in range(g.num_nodes(key))]
+                               for idx in range(g.num_nodes(key))]
             mapping[0] = mapping[0] + list(range(g.num_nodes(key)))
             mapping[1] = mapping[1] + g.num_nodes(key) * [key]
             possible_dests_embed = torch.cat(
@@ -528,7 +535,8 @@ class ChooseDestAndUpdate(nn.Module):
         reference_list.pop(list_index_src_node)
         mapping[0].pop(list_index_src_node)
         mapping[1].pop(list_index_src_node)
-        possible_dests_embed = torch.cat((possible_dests_embed[:list_index_src_node], possible_dests_embed[list_index_src_node+1:]))
+        possible_dests_embed = torch.cat(
+            (possible_dests_embed[:list_index_src_node], possible_dests_embed[list_index_src_node+1:]))
 
         # for key in g.ndata["hv"]:
         #     if key == src_type:
@@ -640,8 +648,12 @@ class ChooseDestAndUpdate(nn.Module):
                 self.log_prob.append(
                     F.log_softmax(dests_scores, dim=1)[:, gt_idx: gt_idx + 1]
                 )
+            a = action[1].type(torch.LongTensor).flatten()
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+                a = a.to(device)
             feature_loss = self.calc_feature_loss(
-                feature_logits, action[1].type(torch.LongTensor).flatten()
+                feature_logits, a
             ).reshape(1, -1)
             self.log_prob.append(feature_loss)
 
@@ -683,20 +695,30 @@ class apply_partial_graph_input_completion(nn.Module):
         def add_dummy_features(g):
             for ntype in g.ntypes:
                 num_nids = g.num_nodes(ntype)
-                g.nodes[ntype].data["hv"] = torch.zeros(
+                hv = torch.zeros(
                     num_nids, self.node_hidden_size, dtype=torch.float32
                 )
-                g.nodes[ntype].data["a"] = torch.zeros(
+                a = torch.zeros(
                     num_nids, 2 * self.node_hidden_size, dtype=torch.float32
                 )
+                if torch.cuda.is_available():
+                    device = torch.device("cuda:0")
+                    hv = hv.to(device)
+                    a = a.cuda()
+                g.nodes[ntype].data["hv"] = hv
+                g.nodes[ntype].data["a"] = a
                 # No node features at this time
                 # g.nodes[ntype].data['hf'] = torch.zeros(num_nids, 2 * self.node_features_size, dtype=torch.float32)
 
             for etype in self.canonical_edge_types:
                 num_eids = g.num_edges(etype)
-                g.edges[etype].data["e"] = torch.zeros(
+                e = torch.zeros(
                     num_eids, edge_feature_size, dtype=torch.float32
                 )
+                if torch.cuda.is_available():
+                    device = torch.device("cuda:0")
+                    e = e.to(device)
+                g.edges[etype].data["e"] = e
 
         graph_data = {}
         for canonical_edge_type in self.canonical_edge_types:
@@ -706,7 +728,7 @@ class apply_partial_graph_input_completion(nn.Module):
         g = dgl.heterograph(graph_data)
         if torch.cuda.is_available():
             device = torch.device("cuda:0")
-            g.to(device)
+            g = g.to(device)
         add_dummy_features(g)
         empty_out_graph(g)
         return g
@@ -739,6 +761,9 @@ class apply_partial_graph_input_completion(nn.Module):
             exterior_walls_features = torch.tensor(
                 exterior_walls_features, dtype=torch.float32
             ).reshape(-1, 2)
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+                exterior_walls_features = exterior_walls_features.to(device)
         elif exterior_walls_input_size == 3:
             exterior_walls_features = exterior_walls_sequence[:, 1:]
         else:
@@ -792,10 +817,14 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.room_types[connection[2].item()],
             )
             e_feat = connection[4:].tolist()
+            e = torch.tensor([e_feat], dtype=torch.float32)
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+                e = e.to(device)
             self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
-                data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                data={"e": e},
                 etype=etype,
             )
             # Add reverse edge
@@ -805,21 +834,27 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.room_types[connection[0].item()],
             )
             if 0 <= e_feat[1] and e_feat[1] <= 7:
+                e = torch.tensor(
+                    [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
+                )
+                if torch.cuda.is_available():
+                    device = torch.device("cuda:0")
+                    e = e.to(device)
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={
-                        "e": torch.tensor(
-                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
-                        )
-                    },
+                    data={"e": e},
                     etype=etype,
                 )
             elif e_feat[1] == 8:
+                e = torch.tensor([e_feat], dtype=torch.float32)
+                if torch.cuda.is_available():
+                    device = torch.device("cuda:0")
+                    e = e.to(device)
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                    data={"e": e},
                     etype=etype,
                 )
             else:
@@ -1084,23 +1119,32 @@ class DGMG(nn.Module):
     def initialize_partial_graph_node_features(self):
         for ntype in self.g.ntypes:
             if self.g.num_nodes(ntype) > 0:
-                # First, initialize features with garbage to make dgl happy
-                self.g.nodes[ntype].data["hv"] = torch.zeros(
+                hv = torch.zeros(
                     (self.g.num_nodes(ntype), self.node_hidden_size)
                 )
-                self.g.nodes[ntype].data["a"] = torch.zeros(
+                a = torch.zeros(
                     (self.g.num_nodes(ntype), 2 * self.node_hidden_size)
                 )
+                if torch.cuda.is_available():
+                    device = torch.device("cuda:0")
+                    hv = hv.to(device)
+                    a = a.to(device)
+                # First, initialize features with garbage to make dgl happy
+                self.g.nodes[ntype].data["hv"] = hv
+                self.g.nodes[ntype].data["a"] = a
 
                 # Then input smart values
                 for node_hv in self.g.nodes[ntype].data["hv"]:
                     graph_embed = self.add_node_agent.graph_op["embed"](self.g)
+                    room_type = torch.LongTensor([self.room_types.index(ntype)])
+                    if torch.cuda.is_available():
+                        device = torch.device("cuda:0")
+                        room_type = room_type.to(device)
                     node_hv = self.add_node_agent.initialize_hv(
                         torch.cat(
                             [
                                 self.add_node_agent.node_type_embed(
-                                    torch.LongTensor(
-                                        [self.room_types.index(ntype)])
+                                    room_type
                                 ),
                                 graph_embed,
                                 # node_features, #ALEX-TODO: Uncomment as needed

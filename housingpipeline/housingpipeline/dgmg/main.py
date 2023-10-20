@@ -9,8 +9,6 @@ import datetime
 import time
 import os
 
-import copy
-import dgl
 import torch
 from housingpipeline.dgmg.houses import plot_and_save_graphs
 from housingpipeline.dgmg.model import DGMG
@@ -19,11 +17,12 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from housingpipeline.dgmg.utils import Printer
 
-# os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
+os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
 # os.makedirs("./example_graphs", exist_ok=True)
 # os.makedirs("./example_graph_plots", exist_ok=True)
 
 def main(opts):
+    print("getting here")
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
 
@@ -201,13 +200,14 @@ def main(opts):
         torch.save(model, "./model.pth")
 
     elif os.path.exists("./model.pth"):
+        print("here")
         t1 = time.time()
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
             raise ValueError("Cycles dataset no longer supported")
 
         elif opts["dataset"] == "houses":
-            from .houses import HouseModelEvaluation, HousePrinting
+            from housingpipeline.dgmg.houses import HouseModelEvaluation, HousePrinting
 
             evaluator = HouseModelEvaluation(
                 v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
@@ -218,12 +218,24 @@ def main(opts):
             )
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
-        model = torch.load("./model.pth")
+        
+        model = DGMG(
+            v_max=opts["max_size"],
+            node_hidden_size=opts["node_hidden_size"],
+            num_prop_rounds=opts["num_propagation_rounds"],
+            node_features_size=opts["node_features_size"],
+            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+            room_types=opts["room_types"],
+            edge_types=opts["edge_types"],
+            gen_houses_dataset_only=opts["gen_data"],
+            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
+        )
+        model.load_state_dict(torch.load("./model.pth"))
         model.eval()
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        evaluator.rollout_and_examine(opts["path_to_user_input_file_inference"], model, opts["num_generated_samples"])
+        evaluator.rollout_and_examine(model, opts["num_generated_samples"])
         evaluator.write_summary()
         t2 = time.time()
         print(
@@ -233,6 +245,7 @@ def main(opts):
         )
         del model.g
 
+    print("and here")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DGMG")
@@ -315,3 +328,4 @@ if __name__ == "__main__":
     opts = setup(args)
 
     main(opts)
+

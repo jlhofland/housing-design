@@ -323,7 +323,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, user_input_path, model, num_samples):
+    def rollout_and_examine(self, model, num_samples):
         assert not model.training, "You need to call model.eval()."
 
         num_total_size = 0
@@ -342,7 +342,7 @@ class HouseModelEvaluation(object):
         }
 
         for i in range(num_samples):
-            sampled_graph = model(user_input_path=user_input_path)
+            sampled_graph = model()
             if isinstance(sampled_graph, list):
                 # When the model is a batched implementation, a list of
                 # DGLGraph objects is returned. Note that with model(),
