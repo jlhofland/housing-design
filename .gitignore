@@ -13,3 +13,4 @@ housingpipeline/housingpipeline/floor_plan_pipeline/pipeline_output/
 housingpipeline/housingpipeline/dgmg/example*
 housingpipeline/build/
 housingpipeline/housingpipeline/houseganpp/wandb/
+housingpipeline/housingpipeline/dgmg/wandb/

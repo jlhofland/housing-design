@@ -5,6 +5,7 @@ import dgl
 import time
 import torch
 import json
+import wandb
 from collections import OrderedDict
 
 
@@ -323,7 +324,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, model, num_samples):
+    def rollout_and_examine(self, model, num_samples, epoch, eval_it, data_it):
         assert not model.training, "You need to call model.eval()."
 
         num_total_size = 0
@@ -376,10 +377,14 @@ class HouseModelEvaluation(object):
                 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
                 g = graphs_to_plot[0]
                 labels, colors = assign_node_labels_and_colors(g)
-                G = dgl.to_networkx(dgl.to_homogeneous(g))
+                G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
                 nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
+                # os.makedirs(self.dir + "/samples/epoch_{:d}/eval_it_{:d}/data_item_{:d}/".format(epoch, eval_it, data_it), exist_ok=True)
+                plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
                 plt.close()
+
+                if wandb.run is not None:
+                    wandb.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
 
                 graphs_to_plot = []
 
@@ -389,7 +394,7 @@ class HouseModelEvaluation(object):
         self.house_ratio = num_house / num_samples
         self.valid_ratio = num_valid / num_samples
 
-    def write_summary(self):
+    def write_summary(self, epoch, eval_it, data_it):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -408,7 +413,7 @@ class HouseModelEvaluation(object):
             "valid_ratio": self.valid_ratio,
         }
 
-        model_eval_path = os.path.join(self.dir, "model_eval.txt")
+        model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
 
         print("\nModel evaluation summary:")
         with open(model_eval_path, "w") as f:
@@ -418,6 +423,8 @@ class HouseModelEvaluation(object):
                 print(msg)
 
         print("\nSaved model evaluation statistics to {}".format(model_eval_path))
+
+        wandb.save(model_eval_path)
 
 
 class HousePrinting(object):
