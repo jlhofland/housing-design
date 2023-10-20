@@ -1094,14 +1094,14 @@ class DGMG(nn.Module):
                     )
 
     def finalize_partial_graph_train(self, init_actions):
-        with open("./ALEX/see_order.txt", "a") as file:
-            file.write("\n****NEW HOUSE****")
-            for ntype in self.g.ntypes:
-                if ntype == "exterior_wall":
-                    continue
-                if self.g.num_nodes(ntype) > 0:
-                    for node_id in range(self.g.num_nodes(ntype)):
-                        file.write("\n"+str(ntype)+" "+str(node_id))
+        # with open("./ALEX/see_order.txt", "a") as file:
+        #     file.write("\n****NEW HOUSE****")
+        #     for ntype in self.g.ntypes:
+        #         if ntype == "exterior_wall":
+        #             continue
+        #         if self.g.num_nodes(ntype) > 0:
+        #             for node_id in range(self.g.num_nodes(ntype)):
+        #                 file.write("\n"+str(ntype)+" "+str(node_id))
         for ntype in self.g.ntypes:
             if ntype == "exterior_wall":
                 continue

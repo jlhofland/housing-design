@@ -5,6 +5,7 @@ import dgl
 import time
 import torch
 import json
+import wandb
 from collections import OrderedDict
 
 
@@ -312,36 +313,7 @@ class HouseModelEvaluation(object):
 
         self.dir = dir
 
-    def assign_node_labels_and_colors(self, g):
-        color_dict = {
-            "exterior_wall": "lightblue",
-            "living_room": "red",
-            "kitchen": "orange",
-            "bedroom": "purple",
-            "bathroom": "pink",
-            "missing": "gray",
-            "closet": "brown",
-            "balcony": "lime",
-            "corridor": "cyan",
-            "dining_room": "gold",
-            "laundry_room": "magenta",
-        }
-        colors = []
-        labels = {}
 
-        # Get node-type order
-        node_type_order = g.ntypes
-
-        # Create node-type subgraph
-        g_homo = dgl.to_homogeneous(g)
-
-        for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
-            labels[idx] = (
-                node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
-            )
-            colors.append(color_dict[node_type_order[node]])
-
-        return labels, colors
 
     def generate_single_valid_graph(self, model):
         assert not model.training, "You need to call model.eval()."
@@ -352,7 +324,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, user_input_path, model, num_samples):
+    def rollout_and_examine(self, model, num_samples, epoch, eval_it, data_it):
         assert not model.training, "You need to call model.eval()."
 
         num_total_size = 0
@@ -371,7 +343,7 @@ class HouseModelEvaluation(object):
         }
 
         for i in range(num_samples):
-            sampled_graph = model(user_input_path=user_input_path)
+            sampled_graph = model()
             if isinstance(sampled_graph, list):
                 # When the model is a batched implementation, a list of
                 # DGLGraph objects is returned. Note that with model(),
@@ -404,11 +376,15 @@ class HouseModelEvaluation(object):
                 plot_times += 1
                 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
                 g = graphs_to_plot[0]
-                labels, colors = self.assign_node_labels_and_colors(g)
-                G = dgl.to_networkx(dgl.to_homogeneous(g))
+                labels, colors = assign_node_labels_and_colors(g)
+                G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
                 nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
+                # os.makedirs(self.dir + "/samples/epoch_{:d}/eval_it_{:d}/data_item_{:d}/".format(epoch, eval_it, data_it), exist_ok=True)
+                plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
                 plt.close()
+
+                if wandb.run is not None:
+                    wandb.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
 
                 graphs_to_plot = []
 
@@ -418,7 +394,7 @@ class HouseModelEvaluation(object):
         self.house_ratio = num_house / num_samples
         self.valid_ratio = num_valid / num_samples
 
-    def write_summary(self):
+    def write_summary(self, epoch, eval_it, data_it):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -437,7 +413,7 @@ class HouseModelEvaluation(object):
             "valid_ratio": self.valid_ratio,
         }
 
-        model_eval_path = os.path.join(self.dir, "model_eval.txt")
+        model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
 
         print("\nModel evaluation summary:")
         with open(model_eval_path, "w") as f:
@@ -447,6 +423,8 @@ class HouseModelEvaluation(object):
                 print(msg)
 
         print("\nSaved model evaluation statistics to {}".format(model_eval_path))
+
+        wandb.save(model_eval_path)
 
 
 class HousePrinting(object):
@@ -468,3 +446,52 @@ class HousePrinting(object):
         for key, value in metrics.items():
             msg += ", {}: {:4f}".format(key, value)
         print(msg)
+
+def assign_node_labels_and_colors(g):
+    color_dict = {
+        "exterior_wall": "lightblue",
+        "living_room": "red",
+        "kitchen": "orange",
+        "bedroom": "purple",
+        "bathroom": "pink",
+        "missing": "gray",
+        "closet": "brown",
+        "balcony": "lime",
+        "corridor": "cyan",
+        "dining_room": "gold",
+        "laundry_room": "magenta",
+    }
+    colors = []
+    labels = {}
+
+    # Get node-type order
+    node_type_order = g.ntypes
+
+    # Create node-type subgraph
+    g_homo = dgl.to_homogeneous(g)
+
+    for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
+        labels[idx] = (
+            node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
+        )
+        colors.append(color_dict[node_type_order[node]])
+
+    return labels, colors
+
+def plot_and_save_graphs(dir, graphs_to_plot):
+    options = {
+        "node_size": 300,
+        "width": 1,
+        "with_labels": True,
+        "font_size": 12,
+        "font_color": "r",
+    }
+
+    for i, graph in enumerate(graphs_to_plot):
+        fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+        g = graphs_to_plot[i]
+        labels, colors = assign_node_labels_and_colors(g)
+        G = dgl.to_networkx(dgl.to_homogeneous(g))
+        nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
+        plt.savefig(dir + "{:d}".format(i))
+        plt.close()

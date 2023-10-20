@@ -10,3 +10,9 @@ housingpipeline/housingpipeline/houseganpp/HGPP/*
 results/
 housingpipeline/housingpipeline/dgmg/checkpoints/
 housingpipeline/housingpipeline/floor_plan_pipeline/pipeline_output/
+housingpipeline/build/
+housingpipeline/housingpipeline/dgmg/example_graph_plots/
+housingpipeline/housingpipeline/dgmg/example_graphs/
+housingpipeline/housingpipeline/dgmg/example_graphzz2.zip
+housingpipeline/housingpipeline/dgmg/wandb/
+housingpipeline/housingpipeline/houseganpp/wandb/
