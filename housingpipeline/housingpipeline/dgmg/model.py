@@ -1,6 +1,7 @@
 from functools import partial
 from housingpipeline.dgmg.utils import parse_input_json, tensor_to_one_hot
 from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset
+import housingpipeline.dgmg.draw_graph_help as draw_graph_help
 
 import os
 import dgl
@@ -9,6 +10,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
 
 
 class LSTMEncoder(nn.Module):
@@ -1047,6 +1050,38 @@ class DGMG(nn.Module):
         # We use the AddNode agent nn's to do this.
         self.initialize_partial_graph_node_features()
 
+        # Set default to false
+        partial_ok = False
+
+        # Loop until user is satisfied with the graph or exits
+        while not partial_ok:
+            # Add legenda to plot
+            plt.figure(figsize=(10, 10))
+            plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+
+            # Get labels and colors
+            labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+
+            # Translate to Homogeneous graph
+            hg = dgl.to_homogeneous(self.g)
+
+            # Convert to networkx
+            ng = hg.to_networkx()
+
+            # Draw the graph
+            nx.draw(ng, node_color=colors, labels=labels, font_size=7)
+            plt.show(block=False)
+
+            # Ask the user if the plot is correct
+            response = input("Does this graph represent your user input?: (yes/no)").strip().lower()
+            if response == 'yes':
+                partial_ok = True
+            elif response == 'no':
+                print("Exiting the program. Please make changes to user input.")
+                exit()
+            else:
+                print("Invalid input. Please enter either 'yes' or 'no'.")
+
         # # Uncomment to print out partial graph
         # for c_et in self.g.canonical_etypes:
         #     if self.g.num_edges(c_et) > 0:
@@ -1056,13 +1091,59 @@ class DGMG(nn.Module):
         #     if self.g.num_nodes(nt) > 0:
         #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
 
+        # make copy so that we can set back the partial graph
+        partial_copy = self.g.copy()
+
         if self.training:
             self.prepare_for_train()
             self.finalize_partial_graph_train(init_actions)
             return self.forward_train(actions)
         else:
-            self.finalize_partial_graph_inference()
-            return self.forward_inference()
+            # Set default to false
+            complete_ok = False
+
+            # Loop until user is satisfied with the graph
+            while not complete_ok:
+                # Finalize the partial graph
+                self.finalize_partial_graph_inference()
+
+                # forward inference
+                self.g = self.forward_inference()
+
+                # Add legenda to plot
+                plt.figure(figsize=(10, 10))
+                plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+
+                # Get labels and colors
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+
+                # Translate to Homogeneous graph
+                hg = dgl.to_homogeneous(self.g)
+
+                # Convert to networkx
+                ng = hg.to_networkx()
+
+                # Draw the graph
+                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
+                plt.show(block=False)
+
+                # Ask the user if the plot is correct
+                response = input("What would you like to do? (continue/regenerate/stop): ").strip().lower()
+                if response == 'continue':
+                    complete_ok = True
+                elif response == 'regenerate':
+                    self.g = partial_copy.copy()
+                elif response == 'stop':
+                    print("Exiting the program.")
+                    exit()
+                else:
+                    print("Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+
+                # Close plot
+                plt.close()
+
+            # Return graph
+            return self.g
 
     def initialize_partial_graph_node_features(self):
         for ntype in self.g.ntypes:
