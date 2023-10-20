@@ -75,7 +75,7 @@ parser.add_argument(
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/full_datasets",
+    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/mini_datasets",
     help="path to the dataset",
 )
 parser.add_argument(
@@ -85,6 +85,7 @@ opt = parser.parse_args()
 
 wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
 wandb.init(project='Housing', config=vars(opt))
+print(f"offline mode: {wandb.run.settings._offline}")
 
 
 exp_folder = "{}_{}".format(opt.exp_folder, opt.target_set)
@@ -135,7 +136,7 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
         ind_fixed_nodes, _ = selectNodesTypes(nd_to_sample, batch_size, nds)
         # build input
         state = {"masks": real_mks, "fixed_nodes": ind_fixed_nodes}
-        # TODO: update _init_input to consider eds_f
+        # Done: update _init_input to consider eds_f
         z, given_masks_in, given_nds, given_eds, given_eds_f = _init_input(graph, state)
         z, given_masks_in, given_nds, given_eds, given_eds_f = (
             z.to(device),
@@ -273,13 +274,14 @@ for epoch in range(opt.n_epochs):
         )
         # Measure discriminator's ability to classify real from generated samples
         gradient_penalty = compute_gradient_penalty(
-            discriminator,
-            real_mks.data,
-            gen_mks.data,
-            given_nds.data,
-            given_eds.data,
-            nd_to_sample.data,
-            None,
+            D=discriminator,
+            x=real_mks.data,
+            x_fake=gen_mks.data,
+            given_y=given_nds.data,
+            given_w=given_eds.data,
+            nd_to_sample=nd_to_sample.data,
+            data_parallel=None,
+            given_ed_f=given_eds_f.data,
         )
         d_loss = (
             -torch.mean(real_validity)

@@ -109,7 +109,7 @@ class CMP(nn.Module):
             *conv_block(2*in_channels, 2*in_channels, 3, 1, 1, act="leaky"),
             *conv_block(2*in_channels, in_channels, 3, 1, 1, act="leaky"))
         self.feat_size = feat_size
-        self.expander = nn.Linear(2, 16 * feat_size ** 2)
+        self.expander = nn.Linear(3, 16 * feat_size ** 2)
         self.consolidator = nn.Sequential(*conv_block(2*in_channels, in_channels, 3, 1, 1, act="leaky"))
     def forward(self, feats, edges=None, edge_features=None):
         # allocate memory
@@ -128,14 +128,8 @@ class CMP(nn.Module):
         pos_v_dst = edges[pos_inds[0], 2].long()
         # positive src-node feature volumes
         pos_vecs_src = feats[pos_v_src.contiguous()]
-        # TODO: 
-        # bring in edge features at positive edge indices
-        # convert to size feats.shape[-3] x feats.shape[-1] x feats.shape[-1]
-        if True:
-            edge_features = torch.rand(pos_inds[0].shape[0], 2, device=device)
-            expanded_edge_features = self.expander(edge_features)
-        else:    
-            expanded_edge_features = self.expander(edge_features[pos_inds[0]])
+        # format edge features
+        expanded_edge_features = self.expander(edge_features[pos_inds[0]])
         formatted_edge_features = expanded_edge_features.view(-1, 16, self.feat_size, self.feat_size)
         # concatenate with positive src-node feature volumes with dim=1
         pos_edge_and_node_features_src = torch.cat([pos_vecs_src, formatted_edge_features], dim=1)

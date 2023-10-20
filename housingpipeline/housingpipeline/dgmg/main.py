@@ -50,7 +50,7 @@ def main(opts):
         train_data_loader = DataLoader(
             train_dataset,
             batch_size=1,
-            shuffle=True,
+            shuffle=False,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
@@ -183,10 +183,10 @@ def main(opts):
                         for i in range(opts["eval_size"]):
                             (user_input_path, init_data, data) = next(iter(eval_data_loader))
                             
-                            slash_index = user_input_path.rfind("/")
-                            save_path = opts["log_dir"] + "/house_" + user_input_path[slash_index+1:-5] + f"_epoch_{epoch}_eval_{eval_it}_eval_{i}.json"
-                            print(f"save path: {save_path}")
-                            wandb.save(save_path)
+                            # slash_index = user_input_path.rfind("/")
+                            # save_path = opts["log_dir"] + "/house_" + user_input_path[slash_index+1:-5] + f"_epoch_{epoch}_eval_{eval_it}_eval_{i}.json"
+                            # print(f"save path: {save_path}")
+                            # wandb.save(user_input_path, save_path)
                             
                             # update model's user-input path
                             model.user_input_path = user_input_path
@@ -312,12 +312,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",

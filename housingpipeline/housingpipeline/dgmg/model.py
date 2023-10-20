@@ -44,7 +44,6 @@ class ConditionVec(nn.Module):
 
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
-        # ALEX-TODO: set LSTM input_dim dynamically and process exterior wall sequence of (x0, y0, x1, y1, D) OR (L, D) both
 
         # expand connections
 
@@ -319,7 +318,7 @@ class AddNode(nn.Module):
                         torch.LongTensor([self.ntypes.index(action[0])])
                     ),
                     graph_embed,
-                    # node_features, #ALEX-TODO: Uncomment as needed
+                    torch.full((1,2), fill_value=-1), # new nodes do not have node_features
                     self.conditioning_vector,
                 ],
                 dim=1,
@@ -327,7 +326,6 @@ class AddNode(nn.Module):
         )
         g.nodes[ntype].data["hv"][-1] = hv_init
         g.nodes[ntype].data["a"][-1] = self.init_node_activation
-        # No node features at this time.
         # g.nodes[ntype].data['hf'][-1] = action[1]
 
     def prepare_training(self):
@@ -340,9 +338,9 @@ class AddNode(nn.Module):
         probs = F.softmax(logits, dim=1)
 
         if not self.training:
-            # ALEX-TODO: Need to somehow sample features.
+            # ALEX: Do not need to sample features as new nodes do not have features
             action = ["dummy_node_type", torch.tensor(
-                self.node_features_size * [-99])]
+                self.node_features_size * [-1])]
             sample = Categorical(probs).sample().item()
             if sample < len(self.ntypes):
                 action[0] = self.ntypes[sample]
@@ -392,7 +390,7 @@ class AddEdge(nn.Module):
         prob = torch.sigmoid(logit)
 
         if not self.training:
-            # ALEX-TODO: Need to somehow sample features.
+            # ALEX-OPTIONAL_TODO: Feature sampling occurs in ChooseDest..
             action = [0, torch.tensor(self.edge_features_size * [-99])]
             action[0] = Bernoulli(prob).sample().item()
         to_add_edge = bool(action[0] == 0)
@@ -611,8 +609,7 @@ class ChooseDestAndUpdate(nn.Module):
                     dest_type, "room_adjacency_edge", src_type)
             ):
                 # For undirected graphs, we add edges for both directions
-                # so that we can perform graph propagation.\
-                # ALEX-TODO: For now, we will...
+                # so that we can perform graph propagation.
                 g.add_edges(
                     u=src_id,
                     v=dest_id,
@@ -730,7 +727,8 @@ class apply_partial_graph_input_completion(nn.Module):
                 exterior_walls_features[1].append(wall[-1])
             exterior_walls_features = torch.tensor(
                 exterior_walls_features, dtype=torch.float32
-            ).reshape(-1, 2)
+            )
+            exterior_walls_features = torch.transpose(exterior_walls_features, 0, 1)
         elif exterior_walls_input_size == 3:
             exterior_walls_features = exterior_walls_sequence[:, 1:]
         else:
@@ -1074,9 +1072,13 @@ class DGMG(nn.Module):
                 self.g.nodes[ntype].data["a"] = torch.zeros(
                     (self.g.num_nodes(ntype), 2 * self.node_hidden_size)
                 )
-
                 # Then input smart values
-                for node_hv in self.g.nodes[ntype].data["hv"]:
+                for i, node_hv in enumerate(self.g.nodes[ntype].data["hv"]):
+                    # Node features. Exterior walls have them, the rest get [-1, -1]
+                    if ntype == "exterior_wall":
+                        hf = self.g.nodes[ntype].data["hf"][i].reshape(1, -1)
+                    else:
+                        hf = torch.full((1,2), fill_value=-1)
                     graph_embed = self.add_node_agent.graph_op["embed"](self.g)
                     node_hv = self.add_node_agent.initialize_hv(
                         torch.cat(
@@ -1086,7 +1088,7 @@ class DGMG(nn.Module):
                                         [self.room_types.index(ntype)])
                                 ),
                                 graph_embed,
-                                # node_features, #ALEX-TODO: Uncomment as needed
+                                hf, # only exterior_walls have node_features
                                 self.conditioning_vector,
                             ],
                             dim=1,
