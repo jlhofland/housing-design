@@ -15,8 +15,8 @@ class LSTMEncoder(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(LSTMEncoder, self).__init__()
         self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
-        self.h0 = torch.rand(1, hidden_dim)
-        self.c0 = torch.rand(1, hidden_dim)
+        self.h0 = torch.nn.Parameter(torch.rand(1, hidden_dim))
+        self.c0 = torch.nn.Parameter(torch.rand(1, hidden_dim))
 
     def forward(self, x):
         out, _ = self.lstm(x, (self.h0, self.c0))
@@ -65,6 +65,11 @@ class ConditionVec(nn.Module):
         self.connections_rooms_encoder = LSTMEncoder(
             input_dim=connections_rooms_input_size, hidden_dim=lstm_hidden_units
         )
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            self.exterior_walls_encoder.to(device)
+            self.connections_corners_encoder.to(device)
+            self.connections_rooms_encoder.to(device)
 
         # Encode the sequences
         # walls
@@ -699,6 +704,9 @@ class apply_partial_graph_input_completion(nn.Module):
             graph_data[canonical_edge_type] = nids
 
         g = dgl.heterograph(graph_data)
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            g.to(device)
         add_dummy_features(g)
         empty_out_graph(g)
         return g
@@ -722,7 +730,7 @@ class apply_partial_graph_input_completion(nn.Module):
         if exterior_walls_input_size == 6:
             exterior_walls_features = [[], []]
             for wall in exterior_walls_sequence:
-                wall = wall.numpy()
+                wall = wall.cpu().numpy()
                 wall_start = wall[1:3]
                 wall_end = wall[3:5]
                 wall_length = np.linalg.norm(wall_end - wall_start)
@@ -913,6 +921,15 @@ class DGMG(nn.Module):
             node_hidden_size,
             num_edge_feature_classes_list,
         )
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            self.choose_dest_agent.to(device)
+            self.add_edge_agent.to(device)
+            self.add_node_agent.to(device)
+            self.conditioning_vector_module.to(device)
+            self.partial_graph_agent.to(device)
+            self.graph_prop.to(device)
+            self.graph_embed.to(device)
 
         # Weight initialization
         self.init_weights()

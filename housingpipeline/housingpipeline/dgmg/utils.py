@@ -147,6 +147,18 @@ def parse_input_json(file_path):
     corner_type_edge_features = torch.cat([corner_type_edge_features_cw, corner_type_edge_features_ccw], dim=0)
     corner_type_edge_features[:,1]  = torch.zeros((corner_type_edge_features.size()[0]))
 
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        (room_number_data, exterior_walls_sequence, connections_corners, connections_rooms, corner_type_edge_features) = (
+            room_number_data.to(device), 
+            exterior_walls_sequence.to(device), 
+            connections_corners.to(device), 
+            connections_rooms.to(device), 
+            corner_type_edge_features.to(device),
+        )
+
+
     return room_number_data, exterior_walls_sequence, connections_corners, connections_rooms, corner_type_edge_features
 
 

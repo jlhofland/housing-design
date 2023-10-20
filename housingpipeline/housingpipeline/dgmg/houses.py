@@ -312,36 +312,7 @@ class HouseModelEvaluation(object):
 
         self.dir = dir
 
-    def assign_node_labels_and_colors(self, g):
-        color_dict = {
-            "exterior_wall": "lightblue",
-            "living_room": "red",
-            "kitchen": "orange",
-            "bedroom": "purple",
-            "bathroom": "pink",
-            "missing": "gray",
-            "closet": "brown",
-            "balcony": "lime",
-            "corridor": "cyan",
-            "dining_room": "gold",
-            "laundry_room": "magenta",
-        }
-        colors = []
-        labels = {}
 
-        # Get node-type order
-        node_type_order = g.ntypes
-
-        # Create node-type subgraph
-        g_homo = dgl.to_homogeneous(g)
-
-        for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
-            labels[idx] = (
-                node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
-            )
-            colors.append(color_dict[node_type_order[node]])
-
-        return labels, colors
 
     def generate_single_valid_graph(self, model):
         assert not model.training, "You need to call model.eval()."
@@ -404,7 +375,7 @@ class HouseModelEvaluation(object):
                 plot_times += 1
                 fig, ax = plt.subplots(1, 1, figsize=(15, 7))
                 g = graphs_to_plot[0]
-                labels, colors = self.assign_node_labels_and_colors(g)
+                labels, colors = assign_node_labels_and_colors(g)
                 G = dgl.to_networkx(dgl.to_homogeneous(g))
                 nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
                 plt.savefig(self.dir + "/samples/{:d}".format(plot_times))
@@ -468,3 +439,52 @@ class HousePrinting(object):
         for key, value in metrics.items():
             msg += ", {}: {:4f}".format(key, value)
         print(msg)
+
+def assign_node_labels_and_colors(g):
+    color_dict = {
+        "exterior_wall": "lightblue",
+        "living_room": "red",
+        "kitchen": "orange",
+        "bedroom": "purple",
+        "bathroom": "pink",
+        "missing": "gray",
+        "closet": "brown",
+        "balcony": "lime",
+        "corridor": "cyan",
+        "dining_room": "gold",
+        "laundry_room": "magenta",
+    }
+    colors = []
+    labels = {}
+
+    # Get node-type order
+    node_type_order = g.ntypes
+
+    # Create node-type subgraph
+    g_homo = dgl.to_homogeneous(g)
+
+    for idx, node in enumerate(g_homo.ndata[dgl.NTYPE]):
+        labels[idx] = (
+            node_type_order[node] + "_" + str(int(g_homo.ndata[dgl.NID][idx]))
+        )
+        colors.append(color_dict[node_type_order[node]])
+
+    return labels, colors
+
+def plot_and_save_graphs(dir, graphs_to_plot):
+    options = {
+        "node_size": 300,
+        "width": 1,
+        "with_labels": True,
+        "font_size": 12,
+        "font_color": "r",
+    }
+
+    for i, graph in enumerate(graphs_to_plot):
+        fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+        g = graphs_to_plot[i]
+        labels, colors = assign_node_labels_and_colors(g)
+        G = dgl.to_networkx(dgl.to_homogeneous(g))
+        nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
+        plt.savefig(dir + "{:d}".format(i))
+        plt.close()

@@ -9,13 +9,19 @@ import datetime
 import time
 import os
 
+import copy
+import dgl
 import torch
+from housingpipeline.dgmg.houses import plot_and_save_graphs
 from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from housingpipeline.dgmg.utils import Printer
 
+# os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
+# os.makedirs("./example_graphs", exist_ok=True)
+# os.makedirs("./example_graph_plots", exist_ok=True)
 
 def main(opts):
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
@@ -61,9 +67,9 @@ def main(opts):
             gen_houses_dataset_only=opts["gen_data"],
             user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
         )
-        # if torch.cuda.is_available():
-        #     device = torch.device("cuda:0")
-        # model.to(device)
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            model.to(device)
 
         # Initialize optimizer
         if opts["optimizer"] == "Adam":
@@ -98,6 +104,7 @@ def main(opts):
                     "#######################\nBegin Training\n#######################"
                 )
                 print(f"Beginning batch {batch_number}")
+                graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(data_loader):
                     # here, the "actions" refer to the cycle decision sequences
                     # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
@@ -150,6 +157,11 @@ def main(opts):
                         batch_prob = 0
                         optimizer.zero_grad()
                         torch.save(model.state_dict(), "./checkpoints/dgmg_model_batch_"+str(batch_number)+".pth")
+                    # graphs_to_plot.append(model.g)
+                    # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
+
+                # plot_and_save_graphs("./example_graph_plots/", graphs_to_plot)
+                # graphs_to_plot = []
 
         t3 = time.time()
 
@@ -238,12 +250,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",

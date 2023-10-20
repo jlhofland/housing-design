@@ -75,7 +75,7 @@ parser.add_argument(
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/full_datasets",
+    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/mini_datasets",
     help="path to the dataset",
 )
 parser.add_argument(
@@ -200,7 +200,7 @@ fp_dataset_test = FloorplanGraphDataset(
 fp_loader_test = torch.utils.data.DataLoader(
     fp_dataset_test,
     batch_size=4,
-    shuffle=False,
+    shuffle=True,
     num_workers=opt.n_cpu,
     collate_fn=floorplan_collate_fn,
     pin_memory=False,
@@ -327,7 +327,7 @@ for epoch in range(opt.n_epochs):
                     generator.state_dict(),
                     "./checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
-                wandb.save("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+                wandb.save("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
             if batches_done % opt.status_print_interval == 0:
                 print(
