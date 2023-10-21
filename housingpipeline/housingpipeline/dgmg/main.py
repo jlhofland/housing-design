@@ -11,6 +11,7 @@ import os
 import wandb
 
 import torch
+import torch.multiprocessing as mp
 from housingpipeline.dgmg.houses import plot_and_save_graphs
 from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
@@ -22,30 +23,12 @@ os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingp
 # os.makedirs("./example_graphs", exist_ok=True)
 # os.makedirs("./example_graph_plots", exist_ok=True)
 
-def main(opts, run):
+
+def main(rank, model, opts, run, train_dataset, eval_dataset):
+
+    torch.set_num_threads(1)
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
-
-        # Setup dataset and data loader
-        if opts["dataset"] == "cycles":
-            raise ValueError("Cycles dataset no longer supported")
-        elif opts["dataset"] == "houses":
-            from housingpipeline.dgmg.houses import CustomDataset, HouseDataset, UserInputDataset, HouseModelEvaluation, HousePrinting
-
-            dataset = CustomDataset(opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
-
-            train_dataset = torch.utils.data.Subset(dataset, range(int(opts["train_split"]*len(dataset))))
-            eval_dataset = torch.utils.data.Subset(dataset, range(int(opts["train_split"]*len(dataset)), len(dataset)))
-            # dataset = torch.utils.data.TensorDataset(UserInputDataset(fname=opts["path_to_ui_dataset"]), HouseDataset(fname=opts["path_to_initialization_dataset"]), HouseDataset(fname=opts["path_to_dataset"]))
-            evaluator = HouseModelEvaluation(
-                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
-            )
-            printer = HousePrinting(
-                num_epochs=opts["nepochs"],
-                num_batches=opts["ds_size"] // opts["batch_size"],
-            )
-        else:
-            raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
 
         train_data_loader = DataLoader(
             train_dataset,
@@ -62,18 +45,15 @@ def main(opts, run):
             collate_fn=dataset.collate_single,
         )
 
-        # Initialize_model
-        model = DGMG(
-            v_max=opts["max_size"],
-            node_hidden_size=opts["node_hidden_size"],
-            num_prop_rounds=opts["num_propagation_rounds"],
-            node_features_size=opts["node_features_size"],
-            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
-            room_types=opts["room_types"],
-            edge_types=opts["edge_types"],
-            gen_houses_dataset_only=opts["gen_data"],
-            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
+        from housingpipeline.dgmg.houses import HouseModelEvaluation, HousePrinting
+        evaluator = HouseModelEvaluation(
+            v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
         )
+        printer = HousePrinting(
+            num_epochs=opts["nepochs"],
+            num_batches=opts["ds_size"] // opts["batch_size"],
+        )
+
         # if torch.cuda.is_available():
         #     device = torch.device("cuda:0")
         #     model.to(device)
@@ -89,10 +69,11 @@ def main(opts, run):
 
             writer = SummaryWriter(opts["log_dir"])
         except ImportError:
-            print("If you want to use tensorboard, install tensorboardX with pip.")
+            if rank == 0:
+                print("If you want to use tensorboard, install tensorboardX with pip.")
             writer = None
         train_printer = Printer(
-            opts["nepochs"], len(dataset), opts["batch_size"], writer
+            opts["nepochs"], len(train_dataset), opts["batch_size"], writer
         )
 
         t2 = time.time()
@@ -108,12 +89,15 @@ def main(opts, run):
                 batch_number = 0
                 optimizer.zero_grad()
 
-                print(
-                    "#######################\nBegin Training\n#######################"
-                )
-                print(f"Beginning batch {batch_number}")
+                if rank == 0:
+                    print(
+                        "#######################\nBegin Training\n#######################"
+                    )
                 graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(train_data_loader):
+                    if i%10  == 0:
+                        print(f"PID {rank} - Beginning house {i}")
+
                     try:
                         # here, the "actions" refer to the cycle decision sequences
                         # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
@@ -122,7 +106,8 @@ def main(opts, run):
                         # update model's user-input path
                         model.user_input_path = user_input_path
                         # Update model's cond vector
-                        model.conditioning_vector_module.update_conditioning_vector(user_input_path)
+                        model.conditioning_vector_module.update_conditioning_vector(
+                            user_input_path)
                         model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
                         # update cond vector inside the add-node agent
                         model.add_node_agent.conditioning_vector = model.conditioning_vector
@@ -142,13 +127,15 @@ def main(opts, run):
                         batch_prob += prob_averaged.item()
                         batch_count += 1
 
-                        train_printer.update(
-                            epoch + 1, loss_averaged.item(), prob_averaged.item()
-                        )
+                        if rank == 0:
+                            train_printer.update(
+                                epoch + 1, loss_averaged.item(), prob_averaged.item()
+                            )
 
-                        print(
-                            f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
-                        )
+                        if rank == 0:
+                            print(
+                                f"PID {rank}: Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
+                            )
 
                         if batch_count % opts["batch_size"] == 0:
                             batch_number += 1
@@ -158,49 +145,59 @@ def main(opts, run):
                             # )
 
                             if opts["clip_grad"]:
-                                clip_grad_norm_(model.parameters(), opts["clip_bound"])
+                                clip_grad_norm_(
+                                    model.parameters(), opts["clip_bound"])
 
                             optimizer.step()
 
-                            run.log({
-                            'epoch': epoch,
-                            'batch': batch_count,
-                            'batch_loss': batch_loss,
-                            'averaged_prob': batch_prob,
-                            })
+                            if rank == 0:
+                                run.log({
+                                    'epoch': epoch,
+                                    'batch': batch_count,
+                                    'batch_loss': batch_loss,
+                                    'averaged_prob': batch_prob,
+                                })
 
                             batch_loss = 0
                             batch_prob = 0
                             optimizer.zero_grad()
-                            torch.save(model.state_dict(), f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
-                            run.save(f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
-                        
-                        if batch_count % opts["eval_int"] == 0:
-                            
+                            if rank == 0:
+                                torch.save(model.state_dict(
+                                ), f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
+                                run.save(
+                                    f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
+
+                        if batch_count % opts["eval_int"] == 0 and rank == 0:
+
                             print(f"\n Beginning evaluation number {eval_it}")
                             t3 = time.time()
 
                             model.eval()
                             for i in range(opts["eval_size"]):
-                                (user_input_path, init_data, data) = next(iter(eval_data_loader))
-                                
+                                (user_input_path, init_data, data) = next(
+                                    iter(eval_data_loader))
+
                                 slash_index = user_input_path.rfind("/")
                                 # save_path = opts["log_dir"] + "/house_" + user_input_path[slash_index+1:-5] + f"_epoch_{epoch}_eval_{eval_it}_eval_{i}.json"
                                 # print(f"save path: {save_path}")
                                 # wandb.save(user_input_path, save_path)
-                                print(f"Epoch: {epoch} Eval: {eval_it}, Data: {i}, user input file: {user_input_path[slash_index+1:]}")
+                                print(
+                                    f"Epoch: {epoch} Eval: {eval_it}, Data: {i}, user input file: {user_input_path[slash_index+1:]}")
                                 # update model's user-input path
                                 model.user_input_path = user_input_path
                                 # Update model's cond vector
-                                model.conditioning_vector_module.update_conditioning_vector(user_input_path)
+                                model.conditioning_vector_module.update_conditioning_vector(
+                                    user_input_path)
                                 model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
                                 # update cond vector inside the add-node agent
                                 model.add_node_agent.conditioning_vector = model.conditioning_vector
-                                
-                                evaluator.rollout_and_examine(model, opts["num_generated_samples"], epoch=epoch, eval_it=eval_it, data_it=i, run=run)
-                                evaluator.write_summary(epoch, eval_it, data_it=i, run=run)
+
+                                evaluator.rollout_and_examine(
+                                    model, opts["num_generated_samples"], epoch=epoch, eval_it=eval_it, data_it=i, run=run)
+                                evaluator.write_summary(
+                                    epoch, eval_it, data_it=i, run=run)
                             eval_it += 1
-                            
+
                             t4 = time.time()
 
                             print(
@@ -217,17 +214,19 @@ def main(opts, run):
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
-                        print(f"House number {i+1} raised error {e} \nSkipping this house.")
-        
+                        print(
+                            f"PID: {rank} - House number {i+1} raised error {e} \nSkipping this house.")
+
                     # graphs_to_plot.append(model.g)
                     # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
 
                 # plot_and_save_graphs("./example_graph_plots/", graphs_to_plot)
                 # graphs_to_plot = []
 
-        print(
-            "#######################\nTraining complete, saving last model\n#######################"
-        )
+        if rank == 0:
+            print(
+                "#######################\nTraining complete, saving last model\n#######################"
+            )
 
         # t4 = time.time()
 
@@ -255,11 +254,11 @@ def main(opts, run):
         # )
 
         del model.g
-        torch.save(model.state_dict(), "./model.pth")
-    
-        run.finish()
+        if rank == 0:
+            torch.save(model.state_dict(), "./model.pth")
 
-    elif os.path.exists("./model.pth"):
+
+    elif os.path.exists("./model.pth") and rank == 0:
         t1 = time.time()
         # Setup dataset and data loader
         if opts["dataset"] == "cycles":
@@ -277,7 +276,7 @@ def main(opts, run):
             )
         else:
             raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
-        
+
         model = DGMG(
             v_max=opts["max_size"],
             node_hidden_size=opts["node_hidden_size"],
@@ -287,23 +286,24 @@ def main(opts, run):
             room_types=opts["room_types"],
             edge_types=opts["edge_types"],
             gen_houses_dataset_only=opts["gen_data"],
-            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json", 
+            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json",
         )
         model.load_state_dict(torch.load("./model.pth"))
         model.eval()
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        evaluator.rollout_and_examine(model, opts["num_generated_samples"], run=run)
+        evaluator.rollout_and_examine(
+            model, opts["num_generated_samples"], run=run)
         evaluator.write_summary(run=run)
         t2 = time.time()
         del model.g
-        run.finish()
         print(
             "Job done. It took {} to finish evaluation.".format(
                 datetime.timedelta(seconds=t2 - t1)
             )
         )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DGMG")
@@ -321,17 +321,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
@@ -389,7 +389,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=1,  # ALEX 10
+        default=20,  # ALEX 10
         help="batch size to use for training",
     )
     parser.add_argument(
@@ -405,6 +405,14 @@ if __name__ == "__main__":
         help="constraint of gradient norm for gradient clipping",
     )
 
+    # Multiprocessing
+    parser.add_argument(
+        "--num_proc",
+        type=int,
+        default=4,
+        help="number of processes",
+    )
+
     args = parser.parse_args()
     from housingpipeline.dgmg.utils import setup
 
@@ -413,5 +421,56 @@ if __name__ == "__main__":
     wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
     run = wandb.init(project='Graphs-DGMG', config=opts)
 
-    main(opts, run)
 
+    # multiprocessing
+    num_processes = opts["num_proc"]
+
+    # Initialize_model
+    model = DGMG(
+        v_max=opts["max_size"],
+        node_hidden_size=opts["node_hidden_size"],
+        num_prop_rounds=opts["num_propagation_rounds"],
+        node_features_size=opts["node_features_size"],
+        num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+        room_types=opts["room_types"],
+        edge_types=opts["edge_types"],
+        gen_houses_dataset_only=opts["gen_data"],
+        user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json",
+    )
+    model.share_memory()
+
+    # Divy up data
+    train_datasets = []
+    eval_datasets = []
+    
+    from housingpipeline.dgmg.houses import CustomDataset
+
+    dataset = CustomDataset(
+        opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
+    train_dataset = torch.utils.data.Subset(
+        dataset, range(int(opts["train_split"]*len(dataset))))
+    eval_dataset = torch.utils.data.Subset(dataset, range(
+        int(opts["train_split"]*len(dataset)), len(dataset)))
+    
+    from math import floor
+    split_qty_train = floor(len(train_dataset)/num_processes)
+    split_qty_eval = floor(len(eval_dataset)/num_processes)
+    for rank in range(num_processes):
+        st = rank * split_qty_train
+        ft = (rank + 1) * split_qty_train
+        se = rank * split_qty_eval
+        fe = (rank + 1) * split_qty_eval
+        train_datasets.append(torch.utils.data.Subset(train_dataset, range(st, ft)))
+        eval_datasets.append(torch.utils.data.Subset(eval_dataset, range(se, fe)))
+
+    processes = []
+    for rank in range(num_processes):
+        p = mp.Process(target=main, args=(rank, model, opts, run, train_datasets[rank], eval_datasets[rank]))
+        print("dataset lengths for PID {}: {}, {}".format(rank, len(train_datasets[rank]), len(eval_datasets[rank])))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+    
+    run.finish()
+    
