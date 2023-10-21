@@ -388,6 +388,9 @@ class HouseModelEvaluation(object):
                     run.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
                 else:
                     plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
+                    if run:
+                        run.save(self.dir + "/samples_{:d}.png".format(plot_times))
+
                     plt.close()
 
                 graphs_to_plot = []
@@ -432,7 +435,7 @@ class HouseModelEvaluation(object):
 
         print("\nSaved model evaluation statistics to {}".format(model_eval_path))
         
-        if epoch:
+        if run:
             run.save(model_eval_path)
 
 

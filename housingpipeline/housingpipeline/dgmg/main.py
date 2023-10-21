@@ -294,8 +294,8 @@ def main(opts, run):
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        evaluator.rollout_and_examine(model, opts["num_generated_samples"])
-        evaluator.write_summary()
+        evaluator.rollout_and_examine(model, opts["num_generated_samples"], run=run)
+        evaluator.write_summary(run=run)
         t2 = time.time()
         del model.g
         run.finish()
