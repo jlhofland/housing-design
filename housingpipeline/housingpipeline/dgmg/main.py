@@ -50,7 +50,7 @@ def main(opts):
         train_data_loader = DataLoader(
             train_dataset,
             batch_size=1,
-            shuffle=False,
+            shuffle=True,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
