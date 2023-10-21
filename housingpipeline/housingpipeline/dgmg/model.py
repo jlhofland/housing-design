@@ -19,11 +19,13 @@ class LSTMEncoder(nn.Module):
         self.c0 = torch.rand(1, hidden_dim)
 
     def forward(self, x):
-        if x.nelement() > 0:
+        # print(f"x shape: {x.shape}, 0 el: {x.shape[0]}")
+        if x.shape[0] == 0:
+            return torch.full((self.h0.shape[1],), fill_value=-1)
+        else:
             out, _ = self.lstm(x, (self.h0, self.c0))
             return out[-1, :]  # Take the last output of the sequence
-        else:
-            return torch.full((self.h0.shape[1],), fill_value=-1)
+
 
 
 class ConditionVec(nn.Module):

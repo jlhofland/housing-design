@@ -20,7 +20,7 @@ synthetic_dataset_configure = {
     "node_hidden_size": 16,
     "num_propagation_rounds": 2,
     "optimizer": "Adam",
-    "nepochs": 10, #25
+    "nepochs": 100, #25
     "ds_size": 100,#0,
     "num_generated_samples": 4,#00,
 }

@@ -22,7 +22,7 @@ os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingp
 # os.makedirs("./example_graphs", exist_ok=True)
 # os.makedirs("./example_graph_plots", exist_ok=True)
 
-def main(opts):
+def main(opts, run):
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
         t1 = time.time()
 
@@ -114,100 +114,110 @@ def main(opts):
                 print(f"Beginning batch {batch_number}")
                 graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(train_data_loader):
-                    # here, the "actions" refer to the cycle decision sequences
-                    # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
-                    # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
+                    try:
+                        # here, the "actions" refer to the cycle decision sequences
+                        # log_prob is a negative value := sum of all decision log-probs (also negative). Represents log(p(G,pi)) I think?
+                        # Not sure how the expression E_[p_data(G,pi)][log(p(G,pi))] is maximized this way (except by minimizing to zero log(p(G,pi)))
 
-                    # update model's user-input path
-                    model.user_input_path = user_input_path
-                    # Update model's cond vector
-                    model.conditioning_vector_module.update_conditioning_vector(user_input_path)
-                    model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
-                    # update cond vector inside the add-node agent
-                    model.add_node_agent.conditioning_vector = model.conditioning_vector
+                        # update model's user-input path
+                        model.user_input_path = user_input_path
+                        # Update model's cond vector
+                        model.conditioning_vector_module.update_conditioning_vector(user_input_path)
+                        model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
+                        # update cond vector inside the add-node agent
+                        model.add_node_agent.conditioning_vector = model.conditioning_vector
 
-                    if opts["gen_data"]:
-                        model()
+                        if opts["gen_data"]:
+                            model()
 
-                    log_prob = model(init_actions=init_data, actions=data)
-                    prob = log_prob.detach().exp()
+                        log_prob = model(init_actions=init_data, actions=data)
+                        prob = log_prob.detach().exp()
 
-                    loss_averaged = -log_prob / opts["batch_size"]
-                    prob_averaged = prob / opts["batch_size"]
+                        loss_averaged = -log_prob / opts["batch_size"]
+                        prob_averaged = prob / opts["batch_size"]
 
-                    loss_averaged.backward(retain_graph=True)
+                        loss_averaged.backward(retain_graph=True)
 
-                    batch_loss += loss_averaged.item()
-                    batch_prob += prob_averaged.item()
-                    batch_count += 1
+                        batch_loss += loss_averaged.item()
+                        batch_prob += prob_averaged.item()
+                        batch_count += 1
 
-                    train_printer.update(
-                        epoch + 1, loss_averaged.item(), prob_averaged.item()
-                    )
+                        train_printer.update(
+                            epoch + 1, loss_averaged.item(), prob_averaged.item()
+                        )
 
-                    print(
-                        f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
-                    )
+                        print(
+                            f"Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
+                        )
 
-                    if batch_count % opts["batch_size"] == 0:
+                        if batch_count % opts["batch_size"] == 0:
+                            batch_number += 1
+                            # printer.update(
+                            #     epoch + 1,
+                            #     {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
+                            # )
+
+                            if opts["clip_grad"]:
+                                clip_grad_norm_(model.parameters(), opts["clip_bound"])
+
+                            optimizer.step()
+
+                            run.log({
+                            'epoch': epoch,
+                            'batch': batch_count,
+                            'batch_loss': batch_loss,
+                            'averaged_prob': batch_prob,
+                            })
+
+                            batch_loss = 0
+                            batch_prob = 0
+                            optimizer.zero_grad()
+                            torch.save(model.state_dict(), f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
+                            run.save(f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
+                        
+                        if batch_count % opts["eval_int"] == 0:
+                            
+                            print(f"\n Beginning evaluation number {eval_it}")
+                            t3 = time.time()
+
+                            model.eval()
+                            for i in range(opts["eval_size"]):
+                                (user_input_path, init_data, data) = next(iter(eval_data_loader))
+                                
+                                slash_index = user_input_path.rfind("/")
+                                # save_path = opts["log_dir"] + "/house_" + user_input_path[slash_index+1:-5] + f"_epoch_{epoch}_eval_{eval_it}_eval_{i}.json"
+                                # print(f"save path: {save_path}")
+                                # wandb.save(user_input_path, save_path)
+                                print(f"Epoch: {epoch} Eval: {eval_it}, Data: {i}, user input file: {user_input_path[slash_index+1:]}")
+                                # update model's user-input path
+                                model.user_input_path = user_input_path
+                                # Update model's cond vector
+                                model.conditioning_vector_module.update_conditioning_vector(user_input_path)
+                                model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
+                                # update cond vector inside the add-node agent
+                                model.add_node_agent.conditioning_vector = model.conditioning_vector
+                                
+                                evaluator.rollout_and_examine(model, opts["num_generated_samples"], epoch=epoch, eval_it=eval_it, data_it=i, run=run)
+                                evaluator.write_summary(epoch, eval_it, data_it=i, run=run)
+                            eval_it += 1
+                            
+                            t4 = time.time()
+
+                            print(
+                                "It took {} to finish evaluation.\n".format(
+                                    datetime.timedelta(seconds=t4 - t3)
+                                )
+                            )
+                            model.train()
+                            torch.save(model.state_dict(), "./model.pth")
+
+                    except Exception as e:
                         batch_number += 1
-                        # printer.update(
-                        #     epoch + 1,
-                        #     {"averaged_loss": batch_loss, "averaged_prob": batch_prob},
-                        # )
-
-                        if opts["clip_grad"]:
-                            clip_grad_norm_(model.parameters(), opts["clip_bound"])
-
-                        optimizer.step()
-
-                        wandb.log({
-                        'epoch': epoch,
-                        'batch': batch_count,
-                        'batch_loss': batch_loss,
-                        'averaged_prob': batch_prob,
-                        })
-
+                        batch_count += 1
                         batch_loss = 0
                         batch_prob = 0
                         optimizer.zero_grad()
-                        torch.save(model.state_dict(), f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
-                        wandb.save(f"./checkpoints/dgmg_model_epoch_{epoch}_batch_{batch_count}.pth")
-                    
-                    if batch_count % opts["eval_int"] == 0:
-                        
-                        print(f"\n Beginning evaluation number {eval_it}")
-                        t3 = time.time()
-
-                        model.eval()
-                        for i in range(opts["eval_size"]):
-                            (user_input_path, init_data, data) = next(iter(eval_data_loader))
-                            
-                            # slash_index = user_input_path.rfind("/")
-                            # save_path = opts["log_dir"] + "/house_" + user_input_path[slash_index+1:-5] + f"_epoch_{epoch}_eval_{eval_it}_eval_{i}.json"
-                            # print(f"save path: {save_path}")
-                            # wandb.save(user_input_path, save_path)
-                            
-                            # update model's user-input path
-                            model.user_input_path = user_input_path
-                            # Update model's cond vector
-                            model.conditioning_vector_module.update_conditioning_vector(user_input_path)
-                            model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
-                            # update cond vector inside the add-node agent
-                            model.add_node_agent.conditioning_vector = model.conditioning_vector
-                            
-                            evaluator.rollout_and_examine(model, opts["num_generated_samples"], epoch=epoch, eval_it=eval_it, data_it=i)
-                            evaluator.write_summary(epoch, eval_it, data_it=i)
-                        eval_it += 1
-                        
-                        t4 = time.time()
-
-                        print(
-                            "It took {} to finish evaluation.\n".format(
-                                datetime.timedelta(seconds=t4 - t3)
-                            )
-                        )
-                        model.train()
+                        print(f"House number {i+1} raised error {e} \nSkipping this house.")
         
                     # graphs_to_plot.append(model.g)
                     # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
@@ -245,9 +255,9 @@ def main(opts):
         # )
 
         del model.g
-        torch.save(model, "./model.pth")
+        torch.save(model.state_dict(), "./model.pth")
     
-        wandb.finish()
+        run.finish()
 
     elif os.path.exists("./model.pth"):
         t1 = time.time()
@@ -287,14 +297,13 @@ def main(opts):
         evaluator.rollout_and_examine(model, opts["num_generated_samples"])
         evaluator.write_summary()
         t2 = time.time()
+        del model.g
+        run.finish()
         print(
-            "It took {} to finish evaluation.".format(
+            "Job done. It took {} to finish evaluation.".format(
                 datetime.timedelta(seconds=t2 - t1)
             )
         )
-        del model.g
-
-    print("and here")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DGMG")
@@ -356,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval_int",
         type=int,
-        default="2",
+        default="5",
         help="number of training houses before eval houses",
     )
 
@@ -402,7 +411,7 @@ if __name__ == "__main__":
     opts = setup(args)
 
     wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
-    wandb.init(project='Graphs-DGMG', config=opts)
+    run = wandb.init(project='Graphs-DGMG', config=opts)
 
-    main(opts)
+    main(opts, run)
 

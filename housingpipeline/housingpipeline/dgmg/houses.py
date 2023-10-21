@@ -324,7 +324,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, model, num_samples, epoch, eval_it, data_it):
+    def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None):
         assert not model.training, "You need to call model.eval()."
 
         num_total_size = 0
@@ -341,6 +341,8 @@ class HouseModelEvaluation(object):
             "font_size": 12,
             "font_color": "r",
         }
+
+        print(f"Evaluation saving to {self.dir}")
 
         for i in range(num_samples):
             sampled_graph = model()
@@ -379,12 +381,14 @@ class HouseModelEvaluation(object):
                 labels, colors = assign_node_labels_and_colors(g)
                 G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
                 nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                # os.makedirs(self.dir + "/samples/epoch_{:d}/eval_it_{:d}/data_item_{:d}/".format(epoch, eval_it, data_it), exist_ok=True)
-                plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                plt.close()
-
-                if wandb.run is not None:
-                    wandb.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                os.makedirs(self.dir, exist_ok=True)
+                if epoch:
+                    plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                    plt.close()
+                    run.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                else:
+                    plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
+                    plt.close()
 
                 graphs_to_plot = []
 
@@ -394,7 +398,7 @@ class HouseModelEvaluation(object):
         self.house_ratio = num_house / num_samples
         self.valid_ratio = num_valid / num_samples
 
-    def write_summary(self, epoch, eval_it, data_it):
+    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -413,7 +417,11 @@ class HouseModelEvaluation(object):
             "valid_ratio": self.valid_ratio,
         }
 
-        model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
+        if epoch:
+            model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
+        else:
+            model_eval_path = os.path.join(self.dir, f"model_eval.txt")
+
 
         print("\nModel evaluation summary:")
         with open(model_eval_path, "w") as f:
@@ -423,8 +431,9 @@ class HouseModelEvaluation(object):
                 print(msg)
 
         print("\nSaved model evaluation statistics to {}".format(model_eval_path))
-
-        wandb.save(model_eval_path)
+        
+        if epoch:
+            run.save(model_eval_path)
 
 
 class HousePrinting(object):
