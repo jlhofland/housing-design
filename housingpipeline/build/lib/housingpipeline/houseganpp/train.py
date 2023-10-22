@@ -50,7 +50,7 @@ parser.add_argument(
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=1000, help="interval between image sampling"
+    "--sample_interval", type=int, default=5000, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -78,21 +78,6 @@ parser.add_argument(
     default="/scratch/aledbetter/datasets/hhgpp_datasets/full_datasets",
     help="path to the dataset",
 )
-
-# use checkpoint "restart" model
-parser.add_argument(
-    "--gen_restart_path",
-    type=str,
-    default=None,
-    help="specify a path to a nice model to use to jumpstart training",
-)
-parser.add_argument(
-    "--disc_restart_path",
-    type=str,
-    default=None,
-    help="specify a path to a nice model to use to jumpstart training",
-)
-
 parser.add_argument(
     "--lambda_gp", type=int, default=10, help="lambda for gradient penalty"
 )
@@ -100,7 +85,7 @@ opt = parser.parse_args()
 
 # Initialize W and B logging
 wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
-wandb.init(project='Housing', config=vars(opt))
+wandb.init(project='Housing', config=vars(opt), dir="/scratch/aledbetter/wandb/hhgpp")
 print(f"offline mode: {wandb.run.settings._offline}")
 
 exp_folder = "{}_{}".format(opt.exp_folder, opt.target_set)
@@ -112,11 +97,7 @@ distance_loss = torch.nn.L1Loss()
 
 # Initialize generator and discriminator
 generator = Generator()
-if opt.gen_restart_path is not None:
-    generator.load_state_dict(torch.load(opt.gen_restart_path))
 discriminator = Discriminator()
-if opt.disc_restart_path is not None:
-    discriminator.load_state_dict(torch.load(opt.disc_restart_path))
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
@@ -134,9 +115,9 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
         )
     )
     generatorTest = generator
-    generatorTest.load_state_dict(
-        torch.load("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
-    )
+    # generatorTest.load_state_dict(
+    #     torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+    # )
     generatorTest = generatorTest.eval()
 
     if torch.cuda.is_available():
@@ -345,14 +326,9 @@ for epoch in range(opt.n_epochs):
             if (batches_done % opt.sample_interval == 0) and batches_done:
                 torch.save(
                     generator.state_dict(),
-                    "/scratch/aledbetter/checkpoints/gen_{}_{}.pth".format(exp_folder, batches_done),
+                    "/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
-                wandb.save("/scratch/aledbetter/checkpoints/gen_{}_{}.pth".format(exp_folder, batches_done))
-                torch.save(
-                    discriminator.state_dict(),
-                    "/scratch/aledbetter/checkpoints/disc_{}_{}.pth".format(exp_folder, batches_done),
-                )
-                wandb.save("/scratch/aledbetter/checkpoints/disc_{}_{}.pth".format(exp_folder, batches_done))
+                wandb.save("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
             if batches_done % opt.status_print_interval == 0:
                 print(

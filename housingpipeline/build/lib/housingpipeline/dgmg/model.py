@@ -19,14 +19,8 @@ class LSTMEncoder(nn.Module):
         self.c0 = torch.rand(1, hidden_dim)
 
     def forward(self, x):
-        # print(f"x shape: {x.shape}, 0 el: {x.shape[0]}")
-        if x.shape[0] == 0:
-            # print("yay! returned the garbage")
-            return torch.full((self.h0.shape[1],), fill_value=-1)
-        else:
-            # print("Apparently x numel > 0?? {x.nelement()}")
-            out, _ = self.lstm(x, (self.h0, self.c0))
-            return out[-1, :]  # Take the last output of the sequence
+        out, _ = self.lstm(x, (self.h0, self.c0))
+        return out[-1, :]  # Take the last output of the sequence
 
 
 class ConditionVec(nn.Module):
@@ -746,7 +740,7 @@ class apply_partial_graph_input_completion(nn.Module):
         self.g = self.define_empty_typed_graph(
             ntypes=self.room_types,
             canonical_edge_types=self.canonical_edge_types,
-            edge_feature_size=2 # TODO-Make this smarter... len(connections_rooms_sequence[0][4:].tolist()),
+            edge_feature_size=len(connections_rooms_sequence[0][4:].tolist()),
         )
 
         def initializer(shape, dtype, ctx, range):
