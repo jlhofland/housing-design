@@ -264,13 +264,13 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
 
         # Setup dataset and data loader
         eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
-        dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
+        test_dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
         dataLoader = DataLoader(
-            dataset,
+            test_dataset,
             batch_size=1,
             shuffle=True,
             num_workers=0,
-            collate_fn=dataset.collate_single,
+            collate_fn=test_dataset.collate_single,
         )
         from housingpipeline.dgmg.houses import HouseModelEvaluation, HousePrinting
 
@@ -339,17 +339,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
