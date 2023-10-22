@@ -46,7 +46,7 @@ parser.add_argument(
 parser.add_argument(
     "--n_cpu",
     type=int,
-    default=8,
+    default=1,
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
@@ -97,6 +97,7 @@ distance_loss = torch.nn.L1Loss()
 
 # Initialize generator and discriminator
 generator = Generator()
+generator.load_state_dict(torch.load("./checkpoints/exp_D_20000.pth"))
 discriminator = Discriminator()
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -115,9 +116,9 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
         )
     )
     generatorTest = generator
-    # generatorTest.load_state_dict(
-    #     torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
-    # )
+    generatorTest.load_state_dict(
+        torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+    )
     generatorTest = generatorTest.eval()
 
     if torch.cuda.is_available():

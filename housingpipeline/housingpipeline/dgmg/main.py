@@ -24,7 +24,7 @@ os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingp
 # os.makedirs("./example_graph_plots", exist_ok=True)
 
 
-def main(rank, model, opts, run, train_dataset, eval_dataset):
+def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_dataset=None):
 
     torch.set_num_threads(1)
     if not os.path.exists("./model.pth") or opts["train"] or opts["gen_data"]:
@@ -132,7 +132,7 @@ def main(rank, model, opts, run, train_dataset, eval_dataset):
                                 epoch + 1, loss_averaged.item(), prob_averaged.item()
                             )
 
-                        if rank == 0:
+                        if rank == 0 and i%(opts["batch_size"]/2) == 0:
                             print(
                                 f"PID {rank}: Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
                             )
@@ -258,24 +258,28 @@ def main(rank, model, opts, run, train_dataset, eval_dataset):
             torch.save(model.state_dict(), "./model.pth")
 
 
-    elif os.path.exists("./model.pth") and rank == 0:
+    elif os.path.exists("./model.pth"):
+
         t1 = time.time()
+        
         # Setup dataset and data loader
-        if opts["dataset"] == "cycles":
-            raise ValueError("Cycles dataset no longer supported")
+        dataset = CustomDataset(opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
+        train_datasets = DataLoader(
+            dataset,
+            batch_size=1,
+            shuffle=True,
+            num_workers=0,
+            collate_fn=dataset.collate_single,
+        )
+        from housingpipeline.dgmg.houses import HouseModelEvaluation, HousePrinting
 
-        elif opts["dataset"] == "houses":
-            from housingpipeline.dgmg.houses import HouseModelEvaluation, HousePrinting
-
-            evaluator = HouseModelEvaluation(
-                v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
-            )
-            printer = HousePrinting(
-                num_epochs=opts["nepochs"],
-                num_batches=opts["ds_size"] // opts["batch_size"],
-            )
-        else:
-            raise ValueError("Unsupported dataset: {}".format(opts["dataset"]))
+        evaluator = HouseModelEvaluation(
+            v_min=opts["min_size"], v_max=opts["max_size"], dir=opts["log_dir"]
+        )
+        printer = HousePrinting(
+            num_epochs=opts["nepochs"],
+            num_batches=opts["ds_size"] // opts["batch_size"],
+        )
 
         model = DGMG(
             v_max=opts["max_size"],
@@ -365,7 +369,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval_int",
         type=int,
-        default="5",
+        default="10",
         help="number of training houses before eval houses",
     )
 
@@ -418,59 +422,63 @@ if __name__ == "__main__":
 
     opts = setup(args)
 
-    wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
-    run = wandb.init(project='Graphs-DGMG', config=opts)
-
-
-    # multiprocessing
-    num_processes = opts["num_proc"]
-
-    # Initialize_model
-    model = DGMG(
-        v_max=opts["max_size"],
-        node_hidden_size=opts["node_hidden_size"],
-        num_prop_rounds=opts["num_propagation_rounds"],
-        node_features_size=opts["node_features_size"],
-        num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
-        room_types=opts["room_types"],
-        edge_types=opts["edge_types"],
-        gen_houses_dataset_only=opts["gen_data"],
-        user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json",
-    )
-    model.share_memory()
-
-    # Divy up data
-    train_datasets = []
-    eval_datasets = []
+    if not opts["train"]:
+        main(opts=opts)
     
-    from housingpipeline.dgmg.houses import CustomDataset
+    else:
+        wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
+        run = wandb.init(project='Graphs-DGMG', config=opts)
 
-    dataset = CustomDataset(
-        opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
-    train_dataset = torch.utils.data.Subset(
-        dataset, range(int(opts["train_split"]*len(dataset))))
-    eval_dataset = torch.utils.data.Subset(dataset, range(
-        int(opts["train_split"]*len(dataset)), len(dataset)))
-    
-    from math import floor
-    split_qty_train = floor(len(train_dataset)/num_processes)
-    split_qty_eval = floor(len(eval_dataset)/num_processes)
-    for rank in range(num_processes):
-        st = rank * split_qty_train
-        ft = (rank + 1) * split_qty_train
-        se = rank * split_qty_eval
-        fe = (rank + 1) * split_qty_eval
-        train_datasets.append(torch.utils.data.Subset(train_dataset, range(st, ft)))
-        eval_datasets.append(torch.utils.data.Subset(eval_dataset, range(se, fe)))
 
-    processes = []
-    for rank in range(num_processes):
-        p = mp.Process(target=main, args=(rank, model, opts, run, train_datasets[rank], eval_datasets[rank]))
-        print("dataset lengths for PID {}: {}, {}".format(rank, len(train_datasets[rank]), len(eval_datasets[rank])))
-        p.start()
-        processes.append(p)
-    for p in processes:
-        p.join()
-    
-    run.finish()
+        # multiprocessing
+        num_processes = opts["num_proc"]
+
+        # Initialize_model
+        model = DGMG(
+            v_max=opts["max_size"],
+            node_hidden_size=opts["node_hidden_size"],
+            num_prop_rounds=opts["num_propagation_rounds"],
+            node_features_size=opts["node_features_size"],
+            num_edge_feature_classes_list=opts["num_edge_feature_classes_list"],
+            room_types=opts["room_types"],
+            edge_types=opts["edge_types"],
+            gen_houses_dataset_only=opts["gen_data"],
+            user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json",
+        )
+        model.share_memory()
+
+        # Divy up data
+        train_datasets = []
+        eval_datasets = []
+        
+        from housingpipeline.dgmg.houses import CustomDataset
+
+        dataset = CustomDataset(
+            opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
+        train_dataset = torch.utils.data.Subset(
+            dataset, range(int(opts["train_split"]*len(dataset))))
+        eval_dataset = torch.utils.data.Subset(dataset, range(
+            int(opts["train_split"]*len(dataset)), len(dataset)))
+        
+        from math import floor
+        split_qty_train = floor(len(train_dataset)/num_processes)
+        split_qty_eval = floor(len(eval_dataset)/num_processes)
+        for rank in range(num_processes):
+            st = rank * split_qty_train
+            ft = (rank + 1) * split_qty_train
+            se = rank * split_qty_eval
+            fe = (rank + 1) * split_qty_eval
+            train_datasets.append(torch.utils.data.Subset(train_dataset, range(st, ft)))
+            eval_datasets.append(torch.utils.data.Subset(eval_dataset, range(se, fe)))
+
+        processes = []
+        for rank in range(num_processes):
+            p = mp.Process(target=main, args=(rank, model, opts, run, train_datasets[rank], eval_datasets[rank]))
+            print("dataset lengths for PID {}: {}, {}".format(rank, len(train_datasets[rank]), len(eval_datasets[rank])))
+            p.start()
+            processes.append(p)
+        for p in processes:
+            p.join()
+        
+        run.finish()
     

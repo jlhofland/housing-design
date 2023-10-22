@@ -325,81 +325,84 @@ class HouseModelEvaluation(object):
 
     
     def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None):
-        assert not model.training, "You need to call model.eval()."
+        try:    
+            assert not model.training, "You need to call model.eval()."
 
-        num_total_size = 0
-        num_valid_size = 0
-        num_house = 0
-        num_valid = 0
-        plot_times = 0
-        graphs_to_plot = []
+            num_total_size = 0
+            num_valid_size = 0
+            num_house = 0
+            num_valid = 0
+            plot_times = 0
+            graphs_to_plot = []
 
-        options = {
-            "node_size": 300,
-            "width": 1,
-            "with_labels": True,
-            "font_size": 12,
-            "font_color": "r",
-        }
+            options = {
+                "node_size": 300,
+                "width": 1,
+                "with_labels": True,
+                "font_size": 12,
+                "font_color": "r",
+            }
 
-        print(f"Evaluation saving to {self.dir}")
+            print(f"Evaluation saving to {self.dir}")
 
-        for i in range(num_samples):
-            sampled_graph = model()
-            if isinstance(sampled_graph, list):
-                # When the model is a batched implementation, a list of
-                # DGLGraph objects is returned. Note that with model(),
-                # we generate a single graph as with the non-batched
-                # implementation. We actually support batched generation
-                # during the inference so feel free to modify the code.
-                sampled_graph = sampled_graph[0]
+            for i in range(num_samples):
+                sampled_graph = model()
+                if isinstance(sampled_graph, list):
+                    # When the model is a batched implementation, a list of
+                    # DGLGraph objects is returned. Note that with model(),
+                    # we generate a single graph as with the non-batched
+                    # implementation. We actually support batched generation
+                    # during the inference so feel free to modify the code.
+                    sampled_graph = sampled_graph[0]
 
-            graphs_to_plot.append(sampled_graph)
+                graphs_to_plot.append(sampled_graph)
 
-            graph_size = sampled_graph.num_nodes()
-            valid_size = self.v_min <= graph_size <= self.v_max
-            house = check_house(sampled_graph)
+                graph_size = sampled_graph.num_nodes()
+                valid_size = self.v_min <= graph_size <= self.v_max
+                house = check_house(sampled_graph)
 
-            num_total_size += graph_size
+                num_total_size += graph_size
 
-            if valid_size:
-                num_valid_size += 1
+                if valid_size:
+                    num_valid_size += 1
 
-            if house:
-                num_house += 1
-                print("House passed!")
-            else:
-                print("House failed.. " + '"_"')
-
-            if valid_size and house:
-                num_valid += 1
-
-            if len(graphs_to_plot) >= 1:
-                plot_times += 1
-                fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-                g = graphs_to_plot[0]
-                labels, colors = assign_node_labels_and_colors(g)
-                G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
-                nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                os.makedirs(self.dir, exist_ok=True)
-                if epoch:
-                    plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                    plt.close()
-                    run.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                if house:
+                    num_house += 1
+                    print("House passed!")
                 else:
-                    plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
-                    if run:
-                        run.save(self.dir + "/samples_{:d}.png".format(plot_times))
+                    print("House failed.. " + '"_"')
 
-                    plt.close()
+                if valid_size and house:
+                    num_valid += 1
 
-                graphs_to_plot = []
+                if len(graphs_to_plot) >= 1:
+                    plot_times += 1
+                    fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+                    g = graphs_to_plot[0]
+                    labels, colors = assign_node_labels_and_colors(g)
+                    G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
+                    nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
+                    os.makedirs(self.dir, exist_ok=True)
+                    if epoch:
+                        plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                        plt.close()
+                        run.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                    else:
+                        plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
+                        if run:
+                            run.save(self.dir + "/samples_{:d}.png".format(plot_times))
 
-        self.num_samples_examined = num_samples
-        self.average_size = num_total_size / num_samples
-        self.valid_size_ratio = num_valid_size / num_samples
-        self.house_ratio = num_house / num_samples
-        self.valid_ratio = num_valid / num_samples
+                        plt.close()
+
+                    graphs_to_plot = []
+
+            self.num_samples_examined = num_samples
+            self.average_size = num_total_size / num_samples
+            self.valid_size_ratio = num_valid_size / num_samples
+            self.house_ratio = num_house / num_samples
+            self.valid_ratio = num_valid / num_samples
+        except Exception as e:
+            print(f"Rollout error... {e}")
 
     def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None):
         def _format_value(v):
@@ -420,23 +423,26 @@ class HouseModelEvaluation(object):
             "valid_ratio": self.valid_ratio,
         }
 
-        if epoch:
-            model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
-        else:
-            model_eval_path = os.path.join(self.dir, f"model_eval.txt")
+        try:
+            if epoch:
+                model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
+            else:
+                model_eval_path = os.path.join(self.dir, f"model_eval.txt")
 
 
-        print("\nModel evaluation summary:")
-        with open(model_eval_path, "w") as f:
-            for key, value in statistics.items():
-                msg = "{}\t{}\n".format(key, _format_value(value))
-                f.write(msg)
-                print(msg)
+            print("\nModel evaluation summary:")
+            with open(model_eval_path, "w") as f:
+                for key, value in statistics.items():
+                    msg = "{}\t{}\n".format(key, _format_value(value))
+                    f.write(msg)
+                    print(msg)
 
-        print("\nSaved model evaluation statistics to {}".format(model_eval_path))
-        
-        if run:
-            run.save(model_eval_path)
+            print("\nSaved model evaluation statistics to {}".format(model_eval_path))
+            
+            if run:
+                run.save(model_eval_path)
+        except Exception as e:
+            print(f"Summary writer error... {e}")
 
 
 class HousePrinting(object):
