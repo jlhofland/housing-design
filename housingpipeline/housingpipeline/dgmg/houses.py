@@ -14,7 +14,9 @@ import networkx as nx
 from torch.utils.data import Dataset
 
 
-def check_house(g):
+def check_house(model):
+    g = model.g
+    issues = set()
     # Assert that each exterior wall is connected to at least one other room besides its single outgoing connecting wall edge
     print("\nHouse complete, checking")
     for src in range(g.num_nodes("exterior_wall")):
@@ -25,15 +27,19 @@ def check_house(g):
             if cet[1] == "corner_edge" and cet[2] == "exterior_wall":
                 # Each "exterior_Wall" node should have exactly two edges point to two other walls.
                 if g.out_degrees(u=src, etype=cet) != 2:
-                    print("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
-                    return False
+                    issues.add("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
+                    continue
+                    # print("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
+                    # return False
                 total_out_degrees += 2
                 continue
             if cet[1] == "corner_edge" and cet[2] != "exterior_wall":
                 # No "corner_edge" type edges should connect an "exterior_wall" node and another room type node
                 if g.out_degrees(u=src, etype=cet) != 0:
-                    print("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
-                    return False
+                    issues.add("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
+                    continue
+                    # print("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
+                    # return False
                 continue
             out_degrees = g.out_degrees(u=src, etype=cet)
             if out_degrees > 0:
@@ -41,10 +47,12 @@ def check_house(g):
                 # print(f"Exterior-Wall Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
         if not total_out_degrees > 2:
             # Each "exterior_Wall" node should have connections to at least one other room-type  
-            print(
-                "One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room"
-            )
-            return False
+            issues.add("One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room")
+            break
+            # print(
+            #     "One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room"
+            # )
+            # return False
 
     # Assert that each room is connected to at least two other rooms / walls (how could it be any other way)
     room_types_sans_EW = g.ntypes.copy()
@@ -60,11 +68,37 @@ def check_house(g):
                     total_out_degrees += out_degrees
                     # print(f"Room Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
             if not total_out_degrees >= 2:
-                print("One or more Rooms do not connect to minimum 2 other rooms")
-                return False
+                issues.add("One or more Rooms do not connect to minimum 2 other rooms")
+                break
+                # print("One or more Rooms do not connect to minimum 2 other rooms")
+                # return False
+
+    # Check user-input room number constraints
+    with open(model.user_input_path, "r") as file:
+        ui = json.load(file)
     
-    print("House is valid.")
-    return True
+    rooms = ["living_room", "bedroom", "bathroom"]
+    ui_data = [
+        (ui["number_of_living_rooms"],ui["living_rooms_plus?"]),
+        (ui["number_of_bedrooms"],ui["bathrooms_plus?"]),
+        (ui["number_of_bathrooms"],ui["bathrooms_plus?"]),
+    ]
+    for i, room in enumerate(rooms):
+        if model.g.num_nodes(room) < ui_data[i][0]:
+            issues.add("Too few " + room + "s")
+            continue
+        elif model.g.num_nodes(room) > ui_data[i][0] and ui_data[i][1] == False:
+            issues.add("Too many " + room + "s")
+            continue
+    
+    if not issues:
+        print("House is valid.")
+        return True
+    else:
+        print("Issues with home:")
+        for issue in issues:
+            print(issue)
+        return False
 
 
 def generate_home_dataset(g, num_homes):
@@ -226,9 +260,10 @@ def generate_home_dataset(g, num_homes):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, user_input_folder, partial_seq_path, complete_seq_path):
+    def __init__(self, user_input_folder, partial_seq_path=None, complete_seq_path=None, eval_only=False):
         super(CustomDataset, self).__init__()
 
+        self.eval_only = eval_only
         self.file_names = {}
         self.files = []
         with os.scandir(user_input_folder) as dir:
@@ -236,14 +271,16 @@ class CustomDataset(Dataset):
                 self.file_names[int(entry.name[:-5])] = entry.path
 
         self.files = list(OrderedDict(sorted(self.file_names.items())).values())
-        self.partial_seq = None
-        self.complete_seq = None
+        
+        if not self.eval_only:
+            self.partial_seq = None
+            self.complete_seq = None
 
-        with open(partial_seq_path, "rb") as partial:
-            self.partial_seq = pickle.load(partial)
+            with open(partial_seq_path, "rb") as partial:
+                self.partial_seq = pickle.load(partial)
 
-        with open(complete_seq_path, "rb") as complete:
-            self.complete_seq = pickle.load(complete)
+            with open(complete_seq_path, "rb") as complete:
+                self.complete_seq = pickle.load(complete)
 
     def __len__(self):
         return len(self.files)
@@ -253,9 +290,12 @@ class CustomDataset(Dataset):
         # user_input = None
         # with open(self.files[index], "rb") as input:
         #     user_input = json.load(input)
-        partial_seq = self.partial_seq[index]
-        complete_seq = self.complete_seq[index]
-        return (user_input_path, partial_seq, complete_seq)
+        if not self.eval_only:
+            partial_seq = self.partial_seq[index]
+            complete_seq = self.complete_seq[index]
+            return (user_input_path, partial_seq, complete_seq)
+        else:
+            return user_input_path
 
     def collate_single(self, batch):
         assert len(batch) == 1, "Currently we do not support batched training"
@@ -359,7 +399,7 @@ class HouseModelEvaluation(object):
 
                 graph_size = sampled_graph.num_nodes()
                 valid_size = self.v_min <= graph_size <= self.v_max
-                house = check_house(sampled_graph)
+                house = check_house(model)
 
                 num_total_size += graph_size
 
@@ -404,7 +444,7 @@ class HouseModelEvaluation(object):
         except Exception as e:
             print(f"Rollout error... {e}")
 
-    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None):
+    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None, cli_only=False):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -434,13 +474,16 @@ class HouseModelEvaluation(object):
             with open(model_eval_path, "w") as f:
                 for key, value in statistics.items():
                     msg = "{}\t{}\n".format(key, _format_value(value))
-                    f.write(msg)
+                    if not cli_only:
+                        f.write(msg)        
                     print(msg)
 
-            print("\nSaved model evaluation statistics to {}".format(model_eval_path))
+            if not cli_only:
+                print("\nSaved model evaluation statistics to {}".format(model_eval_path))
             
-            if run:
+            if run is not None:
                 run.save(model_eval_path)
+        
         except Exception as e:
             print(f"Summary writer error... {e}")
 

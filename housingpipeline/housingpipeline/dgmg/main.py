@@ -261,10 +261,11 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
     elif os.path.exists("./model.pth"):
 
         t1 = time.time()
-        
+
         # Setup dataset and data loader
-        dataset = CustomDataset(opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
-        train_datasets = DataLoader(
+        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
+        dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
+        dataLoader = DataLoader(
             dataset,
             batch_size=1,
             shuffle=True,
@@ -297,14 +298,27 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        evaluator.rollout_and_examine(
-            model, opts["num_generated_samples"], run=run)
-        evaluator.write_summary(run=run)
+        for i, user_input_path in enumerate(dataLoader):
+            if i == 5: break
+            print(f"Evaluation {i}")
+            # update model's user-input path
+            model.user_input_path = user_input_path
+            # Update model's cond vector
+            model.conditioning_vector_module.update_conditioning_vector(
+                user_input_path)
+            model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
+            # update cond vector inside the add-node agent
+            model.add_node_agent.conditioning_vector = model.conditioning_vector
+
+            evaluator.rollout_and_examine(
+                model, opts["num_generated_samples"], run=run)
+            evaluator.write_summary(run=run, cli_only=True)
         t2 = time.time()
         del model.g
         print(
-            "Job done. It took {} to finish evaluation.".format(
-                datetime.timedelta(seconds=t2 - t1)
+            "Job done. It took {} to finish evaluation with {} evaluations.".format(
+                datetime.timedelta(seconds=t2 - t1),
+                i,
             )
         )
 
@@ -418,7 +432,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    
     from housingpipeline.dgmg.utils import setup
+    from housingpipeline.dgmg.houses import CustomDataset
 
     opts = setup(args)
 
@@ -451,7 +467,6 @@ if __name__ == "__main__":
         train_datasets = []
         eval_datasets = []
         
-        from housingpipeline.dgmg.houses import CustomDataset
 
         dataset = CustomDataset(
             opts["path_to_ui_dataset"], opts["path_to_initialization_dataset"], opts["path_to_dataset"])
