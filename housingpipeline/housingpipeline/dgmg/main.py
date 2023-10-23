@@ -258,7 +258,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
             torch.save(model.state_dict(), "./model.pth")
 
 
-    elif os.path.exists("./model.pth") and rank == 0:
+    elif os.path.exists("./model.pth"):
         t1 = time.time()
         # Setup dataset and data loader
         eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
@@ -266,7 +266,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         dataloader = DataLoader(
             test_dataset,
             batch_size=1,
-            shuffle=True,
+            shuffle=False,
             num_workers=0,
             collate_fn=test_dataset.collate_single,
         )
@@ -296,6 +296,10 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
+
+        # clear eval folder
+        if os.path.isdir(f"./eval_graphs/"):
+                shutil.rmtree(f"./eval_graphs/")
         for i, user_input_path in enumerate(dataloader):
             if i == 5: break
             print(f"Evaluation {i}")
@@ -310,8 +314,8 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
             model.add_node_agent.conditioning_vector = model.conditioning_vector
 
             # document the ui file
-            os.makedirs(f"./eval_graphs/{lifull_num}", exist_ok=True)
-            shutil.copy(user_input_path, f"./eval_graphs/{lifull_num}")
+            os.makedirs(f"./eval_graphs/{lifull_num}/", exist_ok=True)
+            shutil.copy(user_input_path, f"./eval_graphs/{lifull_num}/")
             evaluator.rollout_and_examine(
                 model, opts["num_generated_samples"], eval_it=i, run=run, lifull_num=lifull_num)
             evaluator.write_summary(eval_it=i, run=run, cli_only=True, lifull_num=lifull_num)
@@ -327,7 +331,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
 
 if __name__ == "__main__":
     os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
-    
+
     parser = argparse.ArgumentParser(description="DGMG")
 
     import numpy as np

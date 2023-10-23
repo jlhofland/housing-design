@@ -623,13 +623,13 @@ class ChooseDestAndUpdate(nn.Module):
                 g.add_edges(
                     u=src_id,
                     v=dest_id,
-                    data={"e": edge_features_u2v.to(dtype=torch.float32)},
+                    data={"e": edge_features_u2v.to(dtype=torch.int32)},
                     etype=(src_type, "room_adjacency_edge", dest_type),
                 )
                 g.add_edges(
                     u=dest_id,
                     v=src_id,
-                    data={"e": edge_features_v2u.to(dtype=torch.float32)},
+                    data={"e": edge_features_v2u.to(dtype=torch.int32)},
                     etype=(dest_type, "room_adjacency_edge", src_type),
                 )
                 # print("ADDED TWO EDGES")
@@ -696,9 +696,14 @@ class apply_partial_graph_input_completion(nn.Module):
 
             for etype in self.canonical_edge_types:
                 num_eids = g.num_edges(etype)
-                g.edges[etype].data["e"] = torch.zeros(
-                    num_eids, edge_feature_size, dtype=torch.float32
-                )
+                if etype == ('exterior_wall', 'corner_edge', 'exterior_wall'):
+                    g.edges[etype].data["e"] = torch.zeros(
+                        num_eids, edge_feature_size, dtype=torch.float32
+                    )
+                else:
+                    g.edges[etype].data["e"] = torch.zeros(
+                        num_eids, edge_feature_size, dtype=torch.int32
+                    )
 
         graph_data = {}
         for canonical_edge_type in self.canonical_edge_types:
@@ -797,7 +802,7 @@ class apply_partial_graph_input_completion(nn.Module):
             self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
-                data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                data={"e": torch.tensor([e_feat]).to(dtype=torch.int32)},
                 etype=etype,
             )
             # Add reverse edge
@@ -812,8 +817,7 @@ class apply_partial_graph_input_completion(nn.Module):
                     v=connection[1].item(),
                     data={
                         "e": torch.tensor(
-                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
-                        )
+                            [[e_feat[0], (e_feat[1] + 4) % 8]]).to(dtype=torch.int32)
                     },
                     etype=etype,
                 )
@@ -821,7 +825,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                    data={"e": torch.tensor([e_feat]).to(dtype=torch.int32)},
                     etype=etype,
                 )
             else:
@@ -1016,9 +1020,11 @@ class DGMG(nn.Module):
         if len(self.choose_dest_agent.log_prob) > 0:
             cd_sum = torch.cat(self.choose_dest_agent.log_prob).sum()
         if len(self.add_edge_agent_finalize_partial_graph.log_prob) > 0:
-            ae_fp_sum = torch.cat(self.add_edge_agent_finalize_partial_graph.log_prob).sum()
+            ae_fp_sum = torch.cat(
+                self.add_edge_agent_finalize_partial_graph.log_prob).sum()
         if len(self.choose_dest_agent_finalize_partial_graph.log_prob) > 0:
-            cd_fp_sum = torch.cat(self.choose_dest_agent_finalize_partial_graph.log_prob).sum()
+            cd_fp_sum = torch.cat(
+                self.choose_dest_agent_finalize_partial_graph.log_prob).sum()
         return an_sum + ae_sum + cd_sum + ae_fp_sum + cd_fp_sum
 
     # def init_cond_vector(self, file_path):
@@ -1088,8 +1094,8 @@ class DGMG(nn.Module):
             self.prepare_for_train()
             self.finalize_partial_graph_train(init_actions)
             return self.forward_train(actions)
-        
-        if not self.training and user_interface==True:
+
+        if not self.training and user_interface == True:
             # Set default to false
             partial_ok = False
 
@@ -1097,10 +1103,12 @@ class DGMG(nn.Module):
             while not partial_ok:
                 # Add legenda to plot
                 plt.figure(figsize=(10, 10))
-                plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+                plt.legend(
+                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
                 # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(
+                    self.g)
 
                 # Translate to Homogeneous graph
                 hg = dgl.to_homogeneous(self.g)
@@ -1113,7 +1121,8 @@ class DGMG(nn.Module):
                 plt.show(block=False)
 
                 # Ask the user if the plot is correct
-                response = input("Does this graph represent your user input?: (yes/no)").strip().lower()
+                response = input(
+                    "Does this graph represent your user input?: (yes/no)").strip().lower()
                 if response == 'yes':
                     partial_ok = True
                 elif response == 'no':
@@ -1129,13 +1138,11 @@ class DGMG(nn.Module):
         #         print(f"Edge features: {c_et} :\n {self.g.edges[c_et].data['e']}")
         # for nt in self.g.ntypes:
         #     if self.g.num_nodes(nt) > 0:
-        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")        
+        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
 
-        
-        
         # Finalize the partial graph
         self.finalize_partial_graph_inference()
-        
+
         if not user_interface:
             return self.forward_inference()
 
@@ -1154,10 +1161,12 @@ class DGMG(nn.Module):
 
                 # Add legenda to plot
                 plt.figure(figsize=(10, 10))
-                plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+                plt.legend(
+                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
                 # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(
+                    self.g)
 
                 # Translate to Homogeneous graph
                 hg = dgl.to_homogeneous(self.g)
@@ -1170,7 +1179,8 @@ class DGMG(nn.Module):
                 plt.show(block=False)
 
                 # Ask the user if the plot is correct
-                response = input("What would you like to do? (continue/regenerate/stop): ").strip().lower()
+                response = input(
+                    "What would you like to do? (continue/regenerate/stop): ").strip().lower()
                 if response == 'continue':
                     complete_ok = True
                 elif response == 'regenerate':
@@ -1179,14 +1189,14 @@ class DGMG(nn.Module):
                     print("Exiting the program.")
                     exit()
                 else:
-                    print("Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+                    print(
+                        "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
 
                 # Close plot
                 plt.close()
 
             # Return graph
             return self.g
-            
 
     def initialize_partial_graph_node_features(self):
         for ntype in self.g.ntypes:
@@ -1273,5 +1283,5 @@ class DGMG(nn.Module):
                         num_trials += 1
                         to_add_edge = self.add_edge_or_not(
                             src_type=ntype,
-                            finalize_partial=True    
+                            finalize_partial=True
                         )

@@ -427,7 +427,7 @@ class HouseModelEvaluation(object):
                     dgl.save_graphs(f"./eval_graphs/{lifull_num}/dgmg_eval_{eval_it}_graph_{i}.bin", [sampled_graph])
 
                     # Uncomment to examine filled graph structure
-                    with open(f"./eval_graphs/{lifull_num}/graph_data_{i}.txt", "w") as file:
+                    with open(f"./eval_graphs/{lifull_num}/graph_data_eval_{eval_it}_graph_{i}.txt", "w") as file:
                         file.write(f"Graph {i}\n\n")
                         for c_et in sampled_graph.canonical_etypes:
                             if sampled_graph.num_edges(c_et) > 0:
@@ -464,7 +464,7 @@ class HouseModelEvaluation(object):
                 G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
                 nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
                 os.makedirs(self.dir, exist_ok=True)
-                os.makedirs(self.dir + "/samples/epoch_{:d}/eval_{:d}/".format(epoch, eval_it), exist_ok=True)
+                os.makedirs(self.dir + f"/samples/epoch_{epoch}/eval_{eval_it}/", exist_ok=True)
                 if epoch is not None:
                     plt.savefig(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
                     plt.close()
