@@ -25,7 +25,118 @@ import pickle
     
 # print(is_edge_adjacent([108, 66, 130, 66, 8, 0], np.array([110,  68, 208, 130])))
 
-# with open("houseganpp/dataset/HHGPP_train_data.npy", "rb") as f:
+# with open("housingpipeline/housingpipeline/houseganpp/dataset/HHGPP_train_data.npy", "rb") as f:
 #     b = pickle.load(f)
-# print(b)
 
+# ''' Check for angled EW and for type 0 rooms '''
+# Houses_with_thick_walls = []
+
+# for counter,home in enumerate(b):
+#     all_rooms_type0 = False
+#     # Find EW ids
+#     EW_lst = []
+#     false_wall = False
+#     for i,node in enumerate(home[1]):
+#         # print(node)
+#         if node[0] == 1:
+#             EW_lst.append(i)
+
+#     if len(EW_lst) == len(home[1]):
+#         all_rooms_type0 = True
+#     # Get EW bbs that are not alligned with axis / have width
+#     EW_bb_lst = home[0][EW_lst[0]:] * 256
+    
+#     for bb in EW_bb_lst:
+#         x0, y0, x1, y1 = bb
+#         width = x1 - x0
+#         height = y1 - y0    
+#         if width > 1 and height > 1:
+#             false_wall = True
+#             # print(bb)
+#     if false_wall == True:
+#         Houses_with_thick_walls.append([counter, all_rooms_type0])
+#     print(counter)
+
+# for boi in Houses_with_thick_walls:
+#     print(boi)
+# print(len(Houses_with_thick_walls))
+
+# abc=0
+# for n in Houses_with_thick_walls:
+#     if n[1] == True:
+#         abc+=1
+# print(abc)
+
+with open("housingpipeline/housingpipeline/houseganpp/dataset/HHGPP_eval_data_filtered.p", "rb") as f:
+    data = pickle.load(f)
+
+direction_list = []
+all_room_distribution = []
+
+for counterz,home in enumerate(data):
+    print(counterz)
+    num_directions_per_room = []
+    for i, room in enumerate(home[1]): # Check each room
+        room_direction_list = []
+        num_directions = 0
+        North = 0
+        East = 0
+        South = 0
+        West = 0
+
+        if room[0] == 0.: # Not EW
+            for j,edge in enumerate(home[2]): # Check each edge
+                if edge[1] == 1: # If edge exists
+                    if edge[0] == i: # If edge is from given room
+                        room_direction_list.append(home[3][j][2])
+            # print(f'direction going out of room {i}')
+            # print(room_direction_list)
+            # print('')
+            
+            for direction in room_direction_list:
+                if direction in {7,0,1}: # direction is SE, E, NE
+                    East = 1
+                if direction in {1,2,3}: # direction is NE, N, NW
+                    North = 1
+                if direction in {3,4,5}: # direction is NW, W, SW
+                    West = 1
+                if direction in {5,6,7}: # direction is SW, S, SE
+                    South = 1
+            num_directions = East + North + West + South
+
+            direction_list.append(room_direction_list)
+            num_directions_per_room.append(num_directions)
+
+        # Printing for checking
+        # print(home[1])
+        # for j,eee in enumerate(home[2]):
+        #     print(f'{eee}  + {home[3][j]}')
+    
+    room_distribution = []
+    for i in range(5):
+        room_distribution.append(num_directions_per_room.count(i) / len(num_directions_per_room))
+    
+    all_room_distribution.append(room_distribution)
+
+
+
+
+
+average_direction_distributions = np.array([0,0,0,0,0])
+
+for distr in all_room_distribution:
+    average_direction_distributions = average_direction_distributions + np.array(distr)
+
+average_direction_distributions = average_direction_distributions / len(all_room_distribution)
+
+
+print(all_room_distribution)
+print(average_direction_distributions)
+
+'''
+
+Distribution of amount of rooms with amount of directions checked:
+[0, 1, 2, 3, 4]
+[0, 3.3926383920000003e-04, 5.467806213999999e-03, 6.611541502e-02, 9.280775147999998e-01]
+
+'''
