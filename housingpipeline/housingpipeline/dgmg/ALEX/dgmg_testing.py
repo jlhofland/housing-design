@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 g : dgl.DGLGraph = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_6.bin")[0][0]
-
+print('hello')
 src_types = dict()
 src_etypes = dict()
 for cet in g.canonical_etypes:
