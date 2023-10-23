@@ -22,8 +22,12 @@ class LSTMEncoder(nn.Module):
         self.c0 = torch.rand(1, hidden_dim)
 
     def forward(self, x):
-        out, _ = self.lstm(x, (self.h0, self.c0))
-        return out[-1, :]  # Take the last output of the sequence
+        # print(f"x shape: {x.shape}, 0 el: {x.shape[0]}")
+        if x.shape[0] == 0:
+            return torch.full((self.h0.shape[1],), fill_value=-1)
+        else:
+            out, _ = self.lstm(x, (self.h0, self.c0))
+            return out[-1, :]  # Take the last output of the sequence
 
 
 class ConditionVec(nn.Module):
@@ -47,7 +51,6 @@ class ConditionVec(nn.Module):
 
         # Encode the wall and connection sequences with LSTMs
         # num_hidden_units refers to the number of features in the short-term memory and thus the final output vector
-        # ALEX-TODO: set LSTM input_dim dynamically and process exterior wall sequence of (x0, y0, x1, y1, D) OR (L, D) both
 
         # expand connections
 
@@ -322,7 +325,8 @@ class AddNode(nn.Module):
                         torch.LongTensor([self.ntypes.index(action[0])])
                     ),
                     graph_embed,
-                    # node_features, #ALEX-TODO: Uncomment as needed
+                    # new nodes do not have node_features
+                    torch.full((1, 2), fill_value=-1),
                     self.conditioning_vector,
                 ],
                 dim=1,
@@ -330,7 +334,6 @@ class AddNode(nn.Module):
         )
         g.nodes[ntype].data["hv"][-1] = hv_init
         g.nodes[ntype].data["a"][-1] = self.init_node_activation
-        # No node features at this time.
         # g.nodes[ntype].data['hf'][-1] = action[1]
 
     def prepare_training(self):
@@ -343,9 +346,9 @@ class AddNode(nn.Module):
         probs = F.softmax(logits, dim=1)
 
         if not self.training:
-            # ALEX-TODO: Need to somehow sample features.
+            # ALEX: Do not need to sample features as new nodes do not have features
             action = ["dummy_node_type", torch.tensor(
-                self.node_features_size * [-99])]
+                self.node_features_size * [-1])]
             sample = Categorical(probs).sample().item()
             if sample < len(self.ntypes):
                 action[0] = self.ntypes[sample]
@@ -395,7 +398,7 @@ class AddEdge(nn.Module):
         prob = torch.sigmoid(logit)
 
         if not self.training:
-            # ALEX-TODO: Need to somehow sample features.
+            # ALEX-OPTIONAL_TODO: Feature sampling occurs in ChooseDest..
             action = [0, torch.tensor(self.edge_features_size * [-99])]
             action[0] = Bernoulli(prob).sample().item()
         to_add_edge = bool(action[0] == 0)
@@ -515,7 +518,7 @@ class ChooseDestAndUpdate(nn.Module):
 
         for key in g.ndata["hv"]:
             reference_list += [(key, idx)
-                                for idx in range(g.num_nodes(key))]
+                               for idx in range(g.num_nodes(key))]
             mapping[0] = mapping[0] + list(range(g.num_nodes(key)))
             mapping[1] = mapping[1] + g.num_nodes(key) * [key]
             possible_dests_embed = torch.cat(
@@ -526,7 +529,8 @@ class ChooseDestAndUpdate(nn.Module):
         reference_list.pop(list_index_src_node)
         mapping[0].pop(list_index_src_node)
         mapping[1].pop(list_index_src_node)
-        possible_dests_embed = torch.cat((possible_dests_embed[:list_index_src_node], possible_dests_embed[list_index_src_node+1:]))
+        possible_dests_embed = torch.cat(
+            (possible_dests_embed[:list_index_src_node], possible_dests_embed[list_index_src_node+1:]))
 
         # for key in g.ndata["hv"]:
         #     if key == src_type:
@@ -614,8 +618,7 @@ class ChooseDestAndUpdate(nn.Module):
                     dest_type, "room_adjacency_edge", src_type)
             ):
                 # For undirected graphs, we add edges for both directions
-                # so that we can perform graph propagation.\
-                # ALEX-TODO: For now, we will...
+                # so that we can perform graph propagation.
                 g.add_edges(
                     u=src_id,
                     v=dest_id,
@@ -733,7 +736,9 @@ class apply_partial_graph_input_completion(nn.Module):
                 exterior_walls_features[1].append(wall[-1])
             exterior_walls_features = torch.tensor(
                 exterior_walls_features, dtype=torch.float32
-            ).reshape(-1, 2)
+            )
+            exterior_walls_features = torch.transpose(
+                exterior_walls_features, 0, 1)
         elif exterior_walls_input_size == 3:
             exterior_walls_features = exterior_walls_sequence[:, 1:]
         else:
@@ -745,7 +750,8 @@ class apply_partial_graph_input_completion(nn.Module):
         self.g = self.define_empty_typed_graph(
             ntypes=self.room_types,
             canonical_edge_types=self.canonical_edge_types,
-            edge_feature_size=len(connections_rooms_sequence[0][4:].tolist()),
+            # TODO-Make this smarter... len(connections_rooms_sequence[0][4:].tolist()),
+            edge_feature_size=2
         )
 
         def initializer(shape, dtype, ctx, range):
@@ -916,6 +922,18 @@ class DGMG(nn.Module):
             node_hidden_size,
             num_edge_feature_classes_list,
         )
+        self.add_edge_agent_finalize_partial_graph = AddEdge(
+            self.graph_embed,
+            node_hidden_size,
+            edge_features_size=self.edge_features_size,
+            etypes=self.edge_types,
+        )
+        self.choose_dest_agent_finalize_partial_graph = ChooseDestAndUpdate(
+            self.graph_embed,
+            self.graph_prop,
+            node_hidden_size,
+            num_edge_feature_classes_list,
+        )
 
         # Weight initialization
         self.init_weights()
@@ -954,6 +972,8 @@ class DGMG(nn.Module):
         self.add_node_agent.prepare_training()
         self.add_edge_agent.prepare_training()
         self.choose_dest_agent.prepare_training()
+        self.add_edge_agent_finalize_partial_graph.prepare_training()
+        self.choose_dest_agent_finalize_partial_graph.prepare_training()
 
     def add_node_and_update(self, a=None):
         """Decide if to add a new node.
@@ -961,16 +981,23 @@ class DGMG(nn.Module):
 
         return self.add_node_agent(self.g, a)
 
-    def add_edge_or_not(self, a=None, src_type=None):
+    def add_edge_or_not(self, a=None, src_type=None, finalize_partial=False):
         """Decide if a new edge should be added."""
 
-        return self.add_edge_agent(self.g, a, src_type=src_type)
+        if not finalize_partial:
+            return self.add_edge_agent(self.g, a, src_type=src_type)
+        else:
+            return self.add_edge_agent_finalize_partial_graph(self.g, a, src_type=src_type)
 
-    def choose_dest_and_update(self, a=None, src_type=None, src_id=None):
+    def choose_dest_and_update(self, a=None, src_type=None, src_id=None, finalize_partial=False):
         """Choose destination and connect it to the latest node.
         Add edges for both directions and update the graph."""
 
-        self.choose_dest_agent(self.g, a, src_type=src_type, src_id=src_id)
+        if not finalize_partial:
+            self.choose_dest_agent(self.g, a, src_type=src_type, src_id=src_id)
+        else:
+            self.choose_dest_agent_finalize_partial_graph(
+                self.g, a, src_type=src_type, src_id=src_id)
 
     def get_log_prob(self):
         an_sum = 0
@@ -985,7 +1012,11 @@ class DGMG(nn.Module):
             ae_sum = torch.cat(self.add_edge_agent.log_prob).sum()
         if len(self.choose_dest_agent.log_prob) > 0:
             cd_sum = torch.cat(self.choose_dest_agent.log_prob).sum()
-        return an_sum + ae_sum + cd_sum
+        if len(self.add_edge_agent_finalize_partial_graph.log_prob) > 0:
+            ae_fp_sum = torch.cat(self.add_edge_agent_finalize_partial_graph.log_prob).sum()
+        if len(self.choose_dest_agent_finalize_partial_graph.log_prob) > 0:
+            cd_fp_sum = torch.cat(self.choose_dest_agent_finalize_partial_graph.log_prob).sum()
+        return an_sum + ae_sum + cd_sum + ae_fp_sum + cd_fp_sum
 
     # def init_cond_vector(self, file_path):
     #     return ConditionVec(file_name=file_path).conditioning_vector
@@ -1155,9 +1186,13 @@ class DGMG(nn.Module):
                 self.g.nodes[ntype].data["a"] = torch.zeros(
                     (self.g.num_nodes(ntype), 2 * self.node_hidden_size)
                 )
-
                 # Then input smart values
-                for node_hv in self.g.nodes[ntype].data["hv"]:
+                for i, node_hv in enumerate(self.g.nodes[ntype].data["hv"]):
+                    # Node features. Exterior walls have them, the rest get [-1, -1]
+                    if ntype == "exterior_wall":
+                        hf = self.g.nodes[ntype].data["hf"][i].reshape(1, -1)
+                    else:
+                        hf = torch.full((1, 2), fill_value=-1)
                     graph_embed = self.add_node_agent.graph_op["embed"](self.g)
                     node_hv = self.add_node_agent.initialize_hv(
                         torch.cat(
@@ -1167,7 +1202,7 @@ class DGMG(nn.Module):
                                         [self.room_types.index(ntype)])
                                 ),
                                 graph_embed,
-                                # node_features, #ALEX-TODO: Uncomment as needed
+                                hf,  # only exterior_walls have node_features
                                 self.conditioning_vector,
                             ],
                             dim=1,
@@ -1175,30 +1210,35 @@ class DGMG(nn.Module):
                     )
 
     def finalize_partial_graph_train(self, init_actions):
-        with open("./ALEX/see_order.txt", "a") as file:
-            file.write("\n****NEW HOUSE****")
-            for ntype in self.g.ntypes:
-                if ntype == "exterior_wall":
-                    continue
-                if self.g.num_nodes(ntype) > 0:
-                    for node_id in range(self.g.num_nodes(ntype)):
-                        file.write("\n"+str(ntype)+" "+str(node_id))
+        # with open("./ALEX/see_order.txt", "a") as file:
+        #     file.write("\n****NEW HOUSE****")
+        #     for ntype in self.g.ntypes:
+        #         if ntype == "exterior_wall":
+        #             continue
+        #         if self.g.num_nodes(ntype) > 0:
+        #             for node_id in range(self.g.num_nodes(ntype)):
+        #                 file.write("\n"+str(ntype)+" "+str(node_id))
         for ntype in self.g.ntypes:
             if ntype == "exterior_wall":
                 continue
             if self.g.num_nodes(ntype) > 0:
                 for node_id in range(self.g.num_nodes(ntype)):
                     to_add_edge = self.add_edge_or_not(
-                        a=init_actions[self.init_action_step][1:], src_type=ntype
+                        a=init_actions[self.init_action_step][1:],
+                        src_type=ntype,
+                        finalize_partial=True,
                     )
                     while to_add_edge:
                         self.choose_dest_and_update(
                             a=init_actions[self.init_action_step][1:],
                             src_type=ntype,
                             src_id=node_id,
+                            finalize_partial=True,
                         )
                         to_add_edge = self.add_edge_or_not(
-                            a=init_actions[self.init_action_step][1:], src_type=ntype
+                            a=init_actions[self.init_action_step][1:],
+                            src_type=ntype,
+                            finalize_partial=True,
                         )
 
     def finalize_partial_graph_inference(self):
@@ -1208,9 +1248,18 @@ class DGMG(nn.Module):
             if self.g.num_nodes(ntype) > 0:
                 for node_id in range(self.g.num_nodes(ntype)):
                     num_trials = 0
-                    to_add_edge = self.add_edge_or_not(src_type=ntype)
+                    to_add_edge = self.add_edge_or_not(
+                        src_type=ntype,
+                        finalize_partial=True
+                    )
                     while to_add_edge and (num_trials < self.g.num_nodes() - 1):
                         self.choose_dest_and_update(
-                            src_type=ntype, src_id=node_id)
+                            src_type=ntype,
+                            src_id=node_id,
+                            finalize_partial=True
+                        )
                         num_trials += 1
-                        to_add_edge = self.add_edge_or_not(src_type=ntype)
+                        to_add_edge = self.add_edge_or_not(
+                            src_type=ntype,
+                            finalize_partial=True    
+                        )
