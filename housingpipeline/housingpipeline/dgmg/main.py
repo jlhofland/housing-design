@@ -9,17 +9,17 @@ import datetime
 import time
 import os
 import wandb
+import shutil
 
 import torch
 import torch.multiprocessing as mp
-from housingpipeline.dgmg.houses import plot_and_save_graphs
+from housingpipeline.dgmg.houses import plot_eval_graphs
 from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from housingpipeline.dgmg.utils import Printer
 
-os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
 # os.makedirs("./example_graphs", exist_ok=True)
 # os.makedirs("./example_graph_plots", exist_ok=True)
 
@@ -95,7 +95,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                     )
                 graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(train_data_loader):
-                    if i%10  == 0:
+                    if i%20  == 0:
                         print(f"PID {rank} - Beginning house {i}")
 
                     try:
@@ -134,7 +134,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
 
                         if rank == 0 and i%(opts["batch_size"]/2) == 0:
                             print(
-                                f"PID {rank}: Finished training on house {(i+1)} with batch size: {opts['batch_size']}"
+                                f"PID {rank}: Finished training on house {(i)} with batch size: {opts['batch_size']}"
                             )
 
                         if batch_count % opts["batch_size"] == 0:
@@ -259,16 +259,14 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
 
 
     elif os.path.exists("./model.pth"):
-
         t1 = time.time()
-
         # Setup dataset and data loader
         eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
         test_dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
-        dataLoader = DataLoader(
+        dataloader = DataLoader(
             test_dataset,
             batch_size=1,
-            shuffle=True,
+            shuffle=False,
             num_workers=0,
             collate_fn=test_dataset.collate_single,
         )
@@ -298,9 +296,14 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         print(
             "#######################\nGenerating sample houses!\n#######################"
         )
-        for i, user_input_path in enumerate(dataLoader):
+
+        # clear eval folder
+        if os.path.isdir(f"./eval_graphs/"):
+                shutil.rmtree(f"./eval_graphs/")
+        for i, user_input_path in enumerate(dataloader):
             if i == 5: break
             print(f"Evaluation {i}")
+            lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
             # update model's user-input path
             model.user_input_path = user_input_path
             # Update model's cond vector
@@ -310,9 +313,12 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
             # update cond vector inside the add-node agent
             model.add_node_agent.conditioning_vector = model.conditioning_vector
 
+            # document the ui file
+            os.makedirs(f"./eval_graphs/{lifull_num}/", exist_ok=True)
+            shutil.copy(user_input_path, f"./eval_graphs/{lifull_num}/")
             evaluator.rollout_and_examine(
-                model, opts["num_generated_samples"], run=run)
-            evaluator.write_summary(run=run, cli_only=True)
+                model, opts["num_generated_samples"], eval_it=i, run=run, lifull_num=lifull_num)
+            evaluator.write_summary(eval_it=i, run=run, cli_only=True, lifull_num=lifull_num)
         t2 = time.time()
         del model.g
         print(
@@ -324,10 +330,13 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
 
 
 if __name__ == "__main__":
+    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
+
     parser = argparse.ArgumentParser(description="DGMG")
 
+    import numpy as np
     # configure
-    parser.add_argument("--seed", type=int, default=9284, help="random seed")
+    parser.add_argument("--seed", type=int, default=np.random.default_rng().integers(0,9999), help="random seed")
 
     # dataset
     parser.add_argument(
@@ -339,22 +348,30 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
         type=str,
         default="input.json",
+    )
+
+    # learning rate
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default="5e-4",
+        help="optimizer learning rate",
     )
 
     # train first, or just eval
@@ -403,6 +420,14 @@ if __name__ == "__main__":
         "or model evaluation results",
     )
 
+    # use checkpoint "restart" model
+    parser.add_argument(
+        "--restart_path",
+        type=str,
+        default=None,
+        help="specify a path to a nice model to use to jumpstart training",
+    )
+
     # optimization
     parser.add_argument(
         "--batch-size",
@@ -432,7 +457,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
+
     from housingpipeline.dgmg.utils import setup
     from housingpipeline.dgmg.houses import CustomDataset
 
@@ -461,6 +486,8 @@ if __name__ == "__main__":
             gen_houses_dataset_only=opts["gen_data"],
             user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json",
         )
+        if opts["restart_path"] is not None:
+            model.load_state_dict(torch.load(opts["restart_path"]))
         model.share_memory()
 
         # Divy up data

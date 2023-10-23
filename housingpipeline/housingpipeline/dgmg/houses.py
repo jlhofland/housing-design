@@ -390,7 +390,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None):
+    def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None, lifull_num=None):
         try:    
             assert not model.training, "You need to call model.eval()."
 
@@ -423,6 +423,21 @@ class HouseModelEvaluation(object):
 
                 graphs_to_plot.append(sampled_graph)
 
+                if epoch is None:
+                    dgl.save_graphs(f"./eval_graphs/{lifull_num}/dgmg_eval_{eval_it}_graph_{i}.bin", [sampled_graph])
+
+                    # Uncomment to examine filled graph structure
+                    with open(f"./eval_graphs/{lifull_num}/graph_data_eval_{eval_it}_graph_{i}.txt", "w") as file:
+                        file.write(f"Graph {i}\n\n")
+                        for c_et in sampled_graph.canonical_etypes:
+                            if sampled_graph.num_edges(c_et) > 0:
+                                file.write(f"Edge numbers: {c_et} : {sampled_graph.num_edges(c_et)}\n")
+                                file.write(f"Edge features: {c_et} :\n {sampled_graph.edges[c_et].data['e']}\n")
+                        for nt in sampled_graph.ntypes:
+                            if sampled_graph.num_nodes(nt) > 0:
+                                file.write(f"Node features: {nt} :\n {sampled_graph.nodes[nt].data}\n")
+
+
                 graph_size = sampled_graph.num_nodes()
                 valid_size = self.v_min <= graph_size <= self.v_max
                 house = check_house(model)
@@ -441,26 +456,32 @@ class HouseModelEvaluation(object):
                 if valid_size and house:
                     num_valid += 1
 
-                if len(graphs_to_plot) >= 1:
-                    plot_times += 1
-                    fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-                    g = graphs_to_plot[0]
-                    labels, colors = assign_node_labels_and_colors(g)
-                    G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
-                    nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                    os.makedirs(self.dir, exist_ok=True)
-                    if epoch:
-                        plt.savefig(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                        plt.close()
-                        run.save(self.dir + "/samples_epoch_{:d}_eval_{:d}_data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                    else:
-                        plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
-                        if run:
-                            run.save(self.dir + "/samples_{:d}.png".format(plot_times))
+            if len(graphs_to_plot) >= 1:
+                plot_times += 1
+                fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+                g = graphs_to_plot[0]
+                labels, colors = assign_node_labels_and_colors(g)
+                G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
+                nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
+                os.makedirs(self.dir, exist_ok=True)
+                os.makedirs(self.dir + f"/samples/epoch_{epoch}/eval_{eval_it}/", exist_ok=True)
+                if epoch is not None:
+                    plt.savefig(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                    plt.close()
+                    run.save(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                else:
+                    plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
+                    if run:
+                        run.save(self.dir + "/samples_{:d}.png".format(plot_times))
 
-                        plt.close()
+                    plt.close()
+                    # graphs_to_plot.append(model.g)
+                # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
 
-                    graphs_to_plot = []
+                if epoch is None:
+                    plot_eval_graphs(f"./eval_graphs/{lifull_num}/", graphs_to_plot, eval_it)
+
+                graphs_to_plot = []
 
             self.num_samples_examined = num_samples
             self.average_size = num_total_size / num_samples
@@ -470,7 +491,7 @@ class HouseModelEvaluation(object):
         except Exception as e:
             print(f"Rollout error... {e}")
 
-    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None, cli_only=False):
+    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None, cli_only=False, lifull_num=None):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -493,7 +514,7 @@ class HouseModelEvaluation(object):
             if epoch:
                 model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
             else:
-                model_eval_path = os.path.join(self.dir, f"model_eval.txt")
+                model_eval_path = os.path.join(f"./eval_graphs/{lifull_num}/", f"model_eval.txt")
 
 
             print("\nModel evaluation summary:")
@@ -565,7 +586,7 @@ def assign_node_labels_and_colors(g):
 
     return labels, colors
 
-def plot_and_save_graphs(dir, graphs_to_plot):
+def plot_eval_graphs(dir, graphs_to_plot, eval_it=None):
     options = {
         "node_size": 300,
         "width": 1,
@@ -574,11 +595,10 @@ def plot_and_save_graphs(dir, graphs_to_plot):
         "font_color": "r",
     }
 
-    for i, graph in enumerate(graphs_to_plot):
+    for i, g in enumerate(graphs_to_plot):
         fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-        g = graphs_to_plot[i]
         labels, colors = assign_node_labels_and_colors(g)
         G = dgl.to_networkx(dgl.to_homogeneous(g))
         nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-        plt.savefig(dir + "{:d}".format(i))
+        plt.savefig(dir + f"eval_{eval_it}_graph_{i}")
         plt.close()

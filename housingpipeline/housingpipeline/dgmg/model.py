@@ -12,6 +12,7 @@ from torch.distributions import Bernoulli, Categorical
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+import copy
 
 
 class LSTMEncoder(nn.Module):
@@ -480,7 +481,7 @@ class ChooseDestAndUpdate(nn.Module):
             [src_embed, dest_embed, self.graph_op["embed"](g)], dim=1)
 
         feature_logits, pred_edge_features_u2v = self.predict_features(e_input)
-        pred_edge_features_v2u = pred_edge_features_u2v
+        pred_edge_features_v2u = copy.deepcopy(pred_edge_features_u2v)
         pred_edge_features_v2u[0][1] = (pred_edge_features_v2u[0][1] + 4) % 8
 
         return feature_logits, pred_edge_features_u2v, pred_edge_features_v2u
@@ -622,13 +623,13 @@ class ChooseDestAndUpdate(nn.Module):
                 g.add_edges(
                     u=src_id,
                     v=dest_id,
-                    data={"he": edge_features_u2v},
+                    data={"e": edge_features_u2v.to(dtype=torch.int32)},
                     etype=(src_type, "room_adjacency_edge", dest_type),
                 )
                 g.add_edges(
                     u=dest_id,
                     v=src_id,
-                    data={"he": edge_features_v2u},
+                    data={"e": edge_features_v2u.to(dtype=torch.int32)},
                     etype=(dest_type, "room_adjacency_edge", src_type),
                 )
                 # print("ADDED TWO EDGES")
@@ -695,9 +696,14 @@ class apply_partial_graph_input_completion(nn.Module):
 
             for etype in self.canonical_edge_types:
                 num_eids = g.num_edges(etype)
-                g.edges[etype].data["e"] = torch.zeros(
-                    num_eids, edge_feature_size, dtype=torch.float32
-                )
+                if etype == ('exterior_wall', 'corner_edge', 'exterior_wall'):
+                    g.edges[etype].data["e"] = torch.zeros(
+                        num_eids, edge_feature_size, dtype=torch.float32
+                    )
+                else:
+                    g.edges[etype].data["e"] = torch.zeros(
+                        num_eids, edge_feature_size, dtype=torch.int32
+                    )
 
         graph_data = {}
         for canonical_edge_type in self.canonical_edge_types:
@@ -796,7 +802,7 @@ class apply_partial_graph_input_completion(nn.Module):
             self.g.add_edges(
                 u=connection[1].item(),
                 v=connection[3].item(),
-                data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                data={"e": torch.tensor([e_feat]).to(dtype=torch.int32)},
                 etype=etype,
             )
             # Add reverse edge
@@ -811,8 +817,7 @@ class apply_partial_graph_input_completion(nn.Module):
                     v=connection[1].item(),
                     data={
                         "e": torch.tensor(
-                            [[e_feat[0], (e_feat[1] + 4) % 8]], dtype=torch.float32
-                        )
+                            [[e_feat[0], (e_feat[1] + 4) % 8]]).to(dtype=torch.int32)
                     },
                     etype=etype,
                 )
@@ -820,7 +825,7 @@ class apply_partial_graph_input_completion(nn.Module):
                 self.g.add_edges(
                     u=connection[3].item(),
                     v=connection[1].item(),
-                    data={"e": torch.tensor([e_feat], dtype=torch.float32)},
+                    data={"e": torch.tensor([e_feat]).to(dtype=torch.int32)},
                     etype=etype,
                 )
             else:
@@ -1003,6 +1008,8 @@ class DGMG(nn.Module):
         an_sum = 0
         ae_sum = 0
         cd_sum = 0
+        ae_fp_sum = 0
+        cd_fp_sum = 0
         # print(f"log_prob: {self.add_node_agent.log_prob}")
         # print(f"log_prob: {self.add_edge_agent.log_prob}")
         # print(f"log_prob: {self.choose_dest_agent.log_prob}")
@@ -1013,9 +1020,11 @@ class DGMG(nn.Module):
         if len(self.choose_dest_agent.log_prob) > 0:
             cd_sum = torch.cat(self.choose_dest_agent.log_prob).sum()
         if len(self.add_edge_agent_finalize_partial_graph.log_prob) > 0:
-            ae_fp_sum = torch.cat(self.add_edge_agent_finalize_partial_graph.log_prob).sum()
+            ae_fp_sum = torch.cat(
+                self.add_edge_agent_finalize_partial_graph.log_prob).sum()
         if len(self.choose_dest_agent_finalize_partial_graph.log_prob) > 0:
-            cd_fp_sum = torch.cat(self.choose_dest_agent_finalize_partial_graph.log_prob).sum()
+            cd_fp_sum = torch.cat(
+                self.choose_dest_agent_finalize_partial_graph.log_prob).sum()
         return an_sum + ae_sum + cd_sum + ae_fp_sum + cd_fp_sum
 
     # def init_cond_vector(self, file_path):
@@ -1068,7 +1077,7 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, init_actions=None, actions=None):
+    def forward(self, init_actions=None, actions=None, user_interface=False):
         # The graph we will work on
         self.g = self.partial_graph_agent(self.user_input_path)
 
@@ -1081,72 +1090,25 @@ class DGMG(nn.Module):
         # We use the AddNode agent nn's to do this.
         self.initialize_partial_graph_node_features()
 
-        # Set default to false
-        partial_ok = False
-
-        # Loop until user is satisfied with the graph or exits
-        while not partial_ok:
-            # Add legenda to plot
-            plt.figure(figsize=(10, 10))
-            plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
-
-            # Get labels and colors
-            labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
-
-            # Translate to Homogeneous graph
-            hg = dgl.to_homogeneous(self.g)
-
-            # Convert to networkx
-            ng = hg.to_networkx()
-
-            # Draw the graph
-            nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-            plt.show(block=False)
-
-            # Ask the user if the plot is correct
-            response = input("Does this graph represent your user input?: (yes/no)").strip().lower()
-            if response == 'yes':
-                partial_ok = True
-            elif response == 'no':
-                print("Exiting the program. Please make changes to user input.")
-                exit()
-            else:
-                print("Invalid input. Please enter either 'yes' or 'no'.")
-
-        # # Uncomment to print out partial graph
-        # for c_et in self.g.canonical_etypes:
-        #     if self.g.num_edges(c_et) > 0:
-        #         print(f"Edge numbers: {c_et} : {self.g.num_edges(c_et)}")
-        #         print(f"Edge features: {c_et} :\n {self.g.edges[c_et].data['e']}")
-        # for nt in self.g.ntypes:
-        #     if self.g.num_nodes(nt) > 0:
-        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
-
-        # make copy so that we can set back the partial graph
-        partial_copy = self.g.copy()
-
         if self.training:
             self.prepare_for_train()
             self.finalize_partial_graph_train(init_actions)
             return self.forward_train(actions)
-        else:
+
+        if not self.training and user_interface == True:
             # Set default to false
-            complete_ok = False
+            partial_ok = False
 
-            # Loop until user is satisfied with the graph
-            while not complete_ok:
-                # Finalize the partial graph
-                self.finalize_partial_graph_inference()
-
-                # forward inference
-                self.g = self.forward_inference()
-
+            # Loop until user is satisfied with the graph or exits
+            while not partial_ok:
                 # Add legenda to plot
                 plt.figure(figsize=(10, 10))
-                plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+                plt.legend(
+                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
                 # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(
+                    self.g)
 
                 # Translate to Homogeneous graph
                 hg = dgl.to_homogeneous(self.g)
@@ -1159,16 +1121,76 @@ class DGMG(nn.Module):
                 plt.show(block=False)
 
                 # Ask the user if the plot is correct
-                response = input("What would you like to do? (continue/regenerate/stop): ").strip().lower()
+                response = input(
+                    "Does this graph represent your user input?: (yes/no)").strip().lower()
+                if response == 'yes':
+                    partial_ok = True
+                elif response == 'no':
+                    print("Exiting the program. Please make changes to user input.")
+                    exit()
+                else:
+                    print("Invalid input. Please enter either 'yes' or 'no'.")
+
+        # # Uncomment to print out partial graph
+        # for c_et in self.g.canonical_etypes:
+        #     if self.g.num_edges(c_et) > 0:
+        #         print(f"Edge numbers: {c_et} : {self.g.num_edges(c_et)}")
+        #         print(f"Edge features: {c_et} :\n {self.g.edges[c_et].data['e']}")
+        # for nt in self.g.ntypes:
+        #     if self.g.num_nodes(nt) > 0:
+        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
+
+        # Finalize the partial graph
+        self.finalize_partial_graph_inference()
+
+        if not user_interface:
+            return self.forward_inference()
+
+        else:
+            # make copy so that we can set back the partial graph
+            partial_copy = copy.copy(self.g)
+
+            # Set default to false
+            complete_ok = False
+
+            # Loop until user is satisfied with the graph
+            while not complete_ok:
+
+                # forward inference
+                self.forward_inference()
+
+                # Add legenda to plot
+                plt.figure(figsize=(10, 10))
+                plt.legend(
+                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
+
+                # Get labels and colors
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(
+                    self.g)
+
+                # Translate to Homogeneous graph
+                hg = dgl.to_homogeneous(self.g)
+
+                # Convert to networkx
+                ng = hg.to_networkx()
+
+                # Draw the graph
+                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
+                plt.show(block=False)
+
+                # Ask the user if the plot is correct
+                response = input(
+                    "What would you like to do? (continue/regenerate/stop): ").strip().lower()
                 if response == 'continue':
                     complete_ok = True
                 elif response == 'regenerate':
-                    self.g = partial_copy.copy()
+                    self.g = copy.copy(partial_copy)
                 elif response == 'stop':
                     print("Exiting the program.")
                     exit()
                 else:
-                    print("Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+                    print(
+                        "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
 
                 # Close plot
                 plt.close()
@@ -1261,5 +1283,5 @@ class DGMG(nn.Module):
                         num_trials += 1
                         to_add_edge = self.add_edge_or_not(
                             src_type=ntype,
-                            finalize_partial=True    
+                            finalize_partial=True
                         )
