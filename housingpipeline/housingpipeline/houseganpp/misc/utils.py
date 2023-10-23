@@ -121,7 +121,7 @@ def selectNodesTypes(nd_to_sample, batch_size, nds):
         # this basically returns the room types for sample's rooms
         _types = np.where(nds[rooms][:,:-2] == 1)[1]
         # this picks a random assortment of room types
-        _t = [t for t in all_types if random.uniform(0, 1) > 0.9]
+        _t = [t for t in all_types if random.uniform(0, 1) > 0.5]
         # ADDING FOR HOUSES with EXTERIOR_WALL NODES. THese should always be fixed.
         if not 0 in _t:
             _t.insert(0, 0)

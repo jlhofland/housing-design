@@ -3,6 +3,7 @@ import os
 import numpy as np
 import math
 import json
+import wandb
 
 from housingpipeline.houseganpp.dataset.floorplan_dataset_maps_functional_high_res import (
     FloorplanGraphDataset,
@@ -45,11 +46,11 @@ parser.add_argument(
 parser.add_argument(
     "--n_cpu",
     type=int,
-    default=8,
+    default=1,
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=100, help="interval between image sampling"
+    "--sample_interval", type=int, default=10, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -57,6 +58,12 @@ parser.add_argument(
     type=int,
     default=1,
     help="number of training steps for discriminator per iter",
+)
+parser.add_argument(
+    "--status_print_interval",
+    type=int,
+    default=2,
+    help="number of batches (of size 1..) between status prints",
 )
 parser.add_argument(
     "--target_set",
@@ -68,13 +75,17 @@ parser.add_argument(
 parser.add_argument(
     "--data_path",
     type=str,
-    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets",
+    default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/mini_datasets",
     help="path to the dataset",
 )
 parser.add_argument(
     "--lambda_gp", type=int, default=10, help="lambda for gradient penalty"
 )
 opt = parser.parse_args()
+
+wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
+wandb.init(project='Housing', config=vars(opt))
+print(f"offline mode: {wandb.run.settings._offline}")
 
 
 exp_folder = "{}_{}".format(opt.exp_folder, opt.target_set)
@@ -86,9 +97,12 @@ distance_loss = torch.nn.L1Loss()
 
 # Initialize generator and discriminator
 generator = Generator()
+generator.load_state_dict(torch.load("./checkpoints/exp_D_20000.pth"))
 discriminator = Discriminator()
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
 generator.to(device)
 discriminator.to(device)
 adversarial_loss.to(device)
@@ -102,9 +116,9 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
         )
     )
     generatorTest = generator
-    # generatorTest.load_state_dict(
-    #     torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
-    # )
+    generatorTest.load_state_dict(
+        torch.load("./checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+    )
     generatorTest = generatorTest.eval()
 
     if torch.cuda.is_available():
@@ -123,7 +137,7 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
         ind_fixed_nodes, _ = selectNodesTypes(nd_to_sample, batch_size, nds)
         # build input
         state = {"masks": real_mks, "fixed_nodes": ind_fixed_nodes}
-        # TODO: update _init_input to consider eds_f
+        # Done: update _init_input to consider eds_f
         z, given_masks_in, given_nds, given_eds, given_eds_f = _init_input(graph, state)
         z, given_masks_in, given_nds, given_eds, given_eds_f = (
             z.to(device),
@@ -155,6 +169,9 @@ def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_don
             nrow=12,
             normalize=False,
         )
+        wandb.log({'Real Images': [wandb.Image("./exps/{}/{}_real.png".format(exp_folder, batches_done))]})
+        wandb.log({'Generated Images': [wandb.Image("./exps/{}/{}_fake.png".format(exp_folder, batches_done))]})
+
         generatorTest.train()
     return
 
@@ -258,13 +275,14 @@ for epoch in range(opt.n_epochs):
         )
         # Measure discriminator's ability to classify real from generated samples
         gradient_penalty = compute_gradient_penalty(
-            discriminator,
-            real_mks.data,
-            gen_mks.data,
-            given_nds.data,
-            given_eds.data,
-            nd_to_sample.data,
-            None,
+            D=discriminator,
+            x=real_mks.data,
+            x_fake=gen_mks.data,
+            given_y=given_nds.data,
+            given_w=given_eds.data,
+            nd_to_sample=nd_to_sample.data,
+            data_parallel=None,
+            given_ed_f=given_eds_f.data,
         )
         d_loss = (
             -torch.mean(real_validity)
@@ -307,25 +325,38 @@ for epoch in range(opt.n_epochs):
             g_loss.backward()
             # Update optimizer
             optimizer_G.step()
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [L1 loss: %f]"
-                % (
-                    epoch,
-                    opt.n_epochs,
-                    i,
-                    len(fp_loader),
-                    d_loss.item(),
-                    g_loss.item(),
-                    err.item(),
-                )
-            )
             if (batches_done % opt.sample_interval == 0) and batches_done:
                 torch.save(
                     generator.state_dict(),
                     "./checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
+                wandb.save("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
+            if batches_done % opt.status_print_interval == 0:
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [L1 loss: %f]"
+                    % (
+                        epoch,
+                        opt.n_epochs,
+                        batches_done,
+                        len(fp_loader),
+                        d_loss.item(),
+                        g_loss.item(),
+                        err.item(),
+                    )
+                )
+            wandb.log({
+            'epoch': epoch,
+            'batch': batches_done,
+            'D_loss': d_loss.item(),
+            'G_loss': g_loss.item(),
+            'L1_loss': err.item()
+            })
             batches_done += opt.n_critic
+
+wandb.finish()
+
+
 
 
 """def reader(filename):

@@ -558,7 +558,7 @@ class FloorplanGraphDataset(Dataset):
     def __getitem__(self, index):
         # load data for single floorplan layout graph
         graph = self.subgraphs[index]
-        rooms_bbs = graph[0]
+        rooms_bbs = graph[0] * (256.0/self.shapes_size)
         room_type_and_features = graph[1]
         edges = graph[2]
         edges_features = graph[3]
@@ -574,7 +574,7 @@ class FloorplanGraphDataset(Dataset):
                 xmax, ymax = max(x0, x1), max(y0, y1)
                 rooms_bbs_aug.append(np.array([xmin, ymin, xmax, ymax]).astype("int"))
             rooms_bbs = rooms_bbs_aug
-        rooms_bbs = np.stack(rooms_bbs) / self.shapes_size
+        rooms_bbs = np.stack(rooms_bbs) / (256.0/self.shapes_size)
 
         im_size = 64
         rooms_mks = np.zeros((rooms_bbs.shape[0], im_size, im_size))
@@ -593,7 +593,7 @@ class FloorplanGraphDataset(Dataset):
 
     def flip_and_rotate(self, v, flip, rot, shape=None):
         if shape is None:
-            shape = self.shapes_size
+            shape = (256.0/self.shapes_size)
         v = self.rotate(np.array((shape, shape)), v, rot)
         if flip:
             x, y = v
