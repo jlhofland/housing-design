@@ -90,6 +90,32 @@ def check_house(model):
         elif model.g.num_nodes(room) > ui_data[i][0] and ui_data[i][1] == False:
             issues.add("Too many " + room + "s")
             continue
+
+    # Check edge features
+        # Check if feature[0] is in range(3)
+        # Check if feature[1] is in range(9)
+        # Per room (not exterior wall) check feature 1's for all connected edges to confirm that 
+        #   together they "bound" the room (should have one each from "N", "S", "W", and "E"), 
+        #   where "N" is a list that includes "NW", "N", and "NE". We have identified that this system 
+        #   is not fool-proof, in that, it is theoretically possible in the training data to have to border 
+        #   rooms whose centroids are so far apart that there are no room adjaceny edges in a direction (N, S, E, W).
+        #   We figure that the percentage of ground truth floor plans creating training graphs with this flaw 
+        #   will be very low. If our own generated graphs show an equally low percentage, then clearly the model
+        #   has learned to properly predict edge features.
+    room_types_sans_EW = g.ntypes.copy()
+    room_types_sans_EW.remove("exterior_wall")
+    for room_type in room_types_sans_EW:
+        for src in range(g.num_nodes(room_type)):
+            for cet in g.canonical_etypes:
+                if cet[0] != room_type or cet[1] == "corner_edge":
+                    continue
+                out_degrees = g.out_degrees(u=src, etype=cet)
+                if out_degrees > 0:
+                    total_out_degrees += out_degrees
+                    # print(f"Room Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
+            if not total_out_degrees >= 2:
+                issues.add("One or more Rooms do not connect to minimum 2 other rooms")
+                break
     
     if not issues:
         print("House is valid.")
