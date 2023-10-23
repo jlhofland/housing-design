@@ -12,6 +12,7 @@ from torch.distributions import Bernoulli, Categorical
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+import copy
 
 
 class LSTMEncoder(nn.Module):
@@ -480,7 +481,7 @@ class ChooseDestAndUpdate(nn.Module):
             [src_embed, dest_embed, self.graph_op["embed"](g)], dim=1)
 
         feature_logits, pred_edge_features_u2v = self.predict_features(e_input)
-        pred_edge_features_v2u = pred_edge_features_u2v
+        pred_edge_features_v2u = copy.deepcopy(pred_edge_features_u2v)
         pred_edge_features_v2u[0][1] = (pred_edge_features_v2u[0][1] + 4) % 8
 
         return feature_logits, pred_edge_features_u2v, pred_edge_features_v2u
@@ -622,13 +623,13 @@ class ChooseDestAndUpdate(nn.Module):
                 g.add_edges(
                     u=src_id,
                     v=dest_id,
-                    data={"he": edge_features_u2v},
+                    data={"e": edge_features_u2v.to(dtype=torch.float32)},
                     etype=(src_type, "room_adjacency_edge", dest_type),
                 )
                 g.add_edges(
                     u=dest_id,
                     v=src_id,
-                    data={"he": edge_features_v2u},
+                    data={"e": edge_features_v2u.to(dtype=torch.float32)},
                     etype=(dest_type, "room_adjacency_edge", src_type),
                 )
                 # print("ADDED TWO EDGES")
@@ -1003,6 +1004,8 @@ class DGMG(nn.Module):
         an_sum = 0
         ae_sum = 0
         cd_sum = 0
+        ae_fp_sum = 0
+        cd_fp_sum = 0
         # print(f"log_prob: {self.add_node_agent.log_prob}")
         # print(f"log_prob: {self.add_edge_agent.log_prob}")
         # print(f"log_prob: {self.choose_dest_agent.log_prob}")
@@ -1068,7 +1071,7 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, init_actions=None, actions=None):
+    def forward(self, init_actions=None, actions=None, user_interface=False):
         # The graph we will work on
         self.g = self.partial_graph_agent(self.user_input_path)
 
@@ -1081,37 +1084,43 @@ class DGMG(nn.Module):
         # We use the AddNode agent nn's to do this.
         self.initialize_partial_graph_node_features()
 
-        # Set default to false
-        partial_ok = False
+        if self.training:
+            self.prepare_for_train()
+            self.finalize_partial_graph_train(init_actions)
+            return self.forward_train(actions)
+        
+        if not self.training and user_interface==True:
+            # Set default to false
+            partial_ok = False
 
-        # Loop until user is satisfied with the graph or exits
-        while not partial_ok:
-            # Add legenda to plot
-            plt.figure(figsize=(10, 10))
-            plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+            # Loop until user is satisfied with the graph or exits
+            while not partial_ok:
+                # Add legenda to plot
+                plt.figure(figsize=(10, 10))
+                plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
 
-            # Get labels and colors
-            labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
+                # Get labels and colors
+                labels, colors = draw_graph_help.assign_node_labels_and_colors(self.g)
 
-            # Translate to Homogeneous graph
-            hg = dgl.to_homogeneous(self.g)
+                # Translate to Homogeneous graph
+                hg = dgl.to_homogeneous(self.g)
 
-            # Convert to networkx
-            ng = hg.to_networkx()
+                # Convert to networkx
+                ng = hg.to_networkx()
 
-            # Draw the graph
-            nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-            plt.show(block=False)
+                # Draw the graph
+                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
+                plt.show(block=False)
 
-            # Ask the user if the plot is correct
-            response = input("Does this graph represent your user input?: (yes/no)").strip().lower()
-            if response == 'yes':
-                partial_ok = True
-            elif response == 'no':
-                print("Exiting the program. Please make changes to user input.")
-                exit()
-            else:
-                print("Invalid input. Please enter either 'yes' or 'no'.")
+                # Ask the user if the plot is correct
+                response = input("Does this graph represent your user input?: (yes/no)").strip().lower()
+                if response == 'yes':
+                    partial_ok = True
+                elif response == 'no':
+                    print("Exiting the program. Please make changes to user input.")
+                    exit()
+                else:
+                    print("Invalid input. Please enter either 'yes' or 'no'.")
 
         # # Uncomment to print out partial graph
         # for c_et in self.g.canonical_etypes:
@@ -1120,26 +1129,28 @@ class DGMG(nn.Module):
         #         print(f"Edge features: {c_et} :\n {self.g.edges[c_et].data['e']}")
         # for nt in self.g.ntypes:
         #     if self.g.num_nodes(nt) > 0:
-        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
+        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")        
 
-        # make copy so that we can set back the partial graph
-        partial_copy = self.g.copy()
+        
+        
+        # Finalize the partial graph
+        self.finalize_partial_graph_inference()
+        
+        if not user_interface:
+            return self.forward_inference()
 
-        if self.training:
-            self.prepare_for_train()
-            self.finalize_partial_graph_train(init_actions)
-            return self.forward_train(actions)
         else:
+            # make copy so that we can set back the partial graph
+            partial_copy = copy.copy(self.g)
+
             # Set default to false
             complete_ok = False
 
             # Loop until user is satisfied with the graph
             while not complete_ok:
-                # Finalize the partial graph
-                self.finalize_partial_graph_inference()
 
                 # forward inference
-                self.g = self.forward_inference()
+                self.forward_inference()
 
                 # Add legenda to plot
                 plt.figure(figsize=(10, 10))
@@ -1163,7 +1174,7 @@ class DGMG(nn.Module):
                 if response == 'continue':
                     complete_ok = True
                 elif response == 'regenerate':
-                    self.g = partial_copy.copy()
+                    self.g = copy.copy(partial_copy)
                 elif response == 'stop':
                     print("Exiting the program.")
                     exit()
@@ -1175,6 +1186,7 @@ class DGMG(nn.Module):
 
             # Return graph
             return self.g
+            
 
     def initialize_partial_graph_node_features(self):
         for ntype in self.g.ntypes:
