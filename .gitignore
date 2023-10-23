@@ -14,3 +14,7 @@ housingpipeline/build/
 housingpipeline/housingpipeline/dgmg/example_graphzz2.zip
 housingpipeline/housingpipeline/dgmg/wandb/
 housingpipeline/housingpipeline/houseganpp/wandb/
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_eval_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_test_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data.npy
+housingpipeline\housingpipeline\houseganpp\dataset\housegan_clean_data.npy

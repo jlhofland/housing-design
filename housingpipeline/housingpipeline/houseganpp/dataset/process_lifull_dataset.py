@@ -3,7 +3,7 @@ This file will prepare the lifull dataset (housegan_clean_data.npy or train_data
 
 Inputs:
   
-  A .npy file (housegan_clean_data.npy or train_data.npy/valid_data.npy) with the following information:
+  A .npy file (housegan_clean_data.npy) with the following information:
     *** House-GAN Dataset ***
 
     This dataset contains 145,811 floorplans in vector format utilized for training House-GAN. The data is organized in a list format, where each element represents one floorplan. For each floorplan in the dataset we have the following elements (in order):
@@ -44,8 +44,12 @@ import random
 import matplotlib.pyplot as plt
 
 
-original_data_path = 'houseganpp/dataset/housegan_clean_data.npy'
-new_data_path = 'houseganpp/dataset/HHGPP_train_data.npy'
+original_data_path = 'housingpipeline\housingpipeline\houseganpp\dataset\housegan_clean_data.npy'
+
+new_data_path_train = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data.npy'
+new_data_path_eval = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_eval_data.npy'
+new_data_path_test = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_test_data.npy'
+
 
 data = np.load(original_data_path, allow_pickle=True)
 
@@ -359,16 +363,16 @@ for home in data:
 
         else: # Connection is RA
             edges_f[i][0] = 1
+            edges_f[i][1] = 1
             edges_f[i][2] = relative_direction(bbs[edge[0]], bbs[edge[2]]) # Find relative direction of node 1 to node 2
 
             if edge[0] in range(len(rooms)) and  edge[2] in range(len(rooms)): # If both nodes are rooms
                 if edge[1] == 1:
                     if edge_has_door(edge[0], edge[2], home[3], home[4]): # If there is a door connecting the rooms
-                        edges_f[i][1] = 1   
+                        edges_f[i][1] = 0
         i = i + 1  
 
     edges_f = np.array(edges_f)
-
 
     # # Print stuff for checking
     # print(nds)
@@ -387,13 +391,29 @@ for home in data:
 
     nr_homes = nr_homes + 1
     print(f'{nr_homes} out of {home_data_length}')
-    # if nr_homes == 10: # amount of rooms we want in the list
+    # if nr_homes == 1: # amount of rooms we want in the list
     #     break
 
 
 
 # Finally, save the list:
 
-with open(new_data_path, 'wb') as f:
-  pickle.dump(new_data,f)
+# Finally, split and save the list:
+# 60-20-20
+
+train_data = new_data[ : math.floor(0.6 * len(new_data))]
+eval_data = new_data[math.floor(0.6 * len(new_data)) : math.floor(0.8 * len(new_data))]
+test_data = new_data[math.floor(0.8 * len(new_data)) : ]
+
+with open(new_data_path_train, 'wb') as f:
+  pickle.dump(train_data,f)
+  f.close()
+
+with open(new_data_path_eval, 'wb') as f:
+  pickle.dump(eval_data,f)
+  f.close()
+
+with open(new_data_path_test, 'wb') as f:
+  pickle.dump(test_data,f)
+  f.close()
 
