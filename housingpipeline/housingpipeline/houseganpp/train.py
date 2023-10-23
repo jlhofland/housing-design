@@ -130,12 +130,12 @@ adversarial_loss.to(device)
 def visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done, batch_size=8):
     print(
         "Loading saved model ... \n{}".format(
-            "/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done)
+            "/scratch/aledbetter/checkpoints/gen_{}_{}.pth".format(exp_folder, batches_done)
         )
     )
     generatorTest = generator
     generatorTest.load_state_dict(
-        torch.load("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+        torch.load("/scratch/aledbetter/checkpoints/gen_{}_{}.pth".format(exp_folder, batches_done))
     )
     generatorTest = generatorTest.eval()
 

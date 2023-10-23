@@ -14,7 +14,9 @@ import networkx as nx
 from torch.utils.data import Dataset
 
 
-def check_house(g):
+def check_house(model):
+    g = model.g
+    issues = set()
     # Assert that each exterior wall is connected to at least one other room besides its single outgoing connecting wall edge
     print("\nHouse complete, checking")
     for src in range(g.num_nodes("exterior_wall")):
@@ -25,15 +27,19 @@ def check_house(g):
             if cet[1] == "corner_edge" and cet[2] == "exterior_wall":
                 # Each "exterior_Wall" node should have exactly two edges point to two other walls.
                 if g.out_degrees(u=src, etype=cet) != 2:
-                    print("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
-                    return False
+                    issues.add("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
+                    continue
+                    # print("One or more Exterior Walls do not connect to exactly two other Exterior Walls")
+                    # return False
                 total_out_degrees += 2
                 continue
             if cet[1] == "corner_edge" and cet[2] != "exterior_wall":
                 # No "corner_edge" type edges should connect an "exterior_wall" node and another room type node
                 if g.out_degrees(u=src, etype=cet) != 0:
-                    print("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
-                    return False
+                    issues.add("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
+                    continue
+                    # print("Corner-type edge used to illegally connect 'exterior wall' and another room-type node")
+                    # return False
                 continue
             out_degrees = g.out_degrees(u=src, etype=cet)
             if out_degrees > 0:
@@ -41,10 +47,12 @@ def check_house(g):
                 # print(f"Exterior-Wall Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
         if not total_out_degrees > 2:
             # Each "exterior_Wall" node should have connections to at least one other room-type  
-            print(
-                "One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room"
-            )
-            return False
+            issues.add("One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room")
+            break
+            # print(
+            #     "One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room"
+            # )
+            # return False
 
     # Assert that each room is connected to at least two other rooms / walls (how could it be any other way)
     room_types_sans_EW = g.ntypes.copy()
@@ -60,11 +68,63 @@ def check_house(g):
                     total_out_degrees += out_degrees
                     # print(f"Room Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
             if not total_out_degrees >= 2:
-                print("One or more Rooms do not connect to minimum 2 other rooms")
-                return False
+                issues.add("One or more Rooms do not connect to minimum 2 other rooms")
+                break
+                # print("One or more Rooms do not connect to minimum 2 other rooms")
+                # return False
+
+    # Check user-input room number constraints
+    with open(model.user_input_path, "r") as file:
+        ui = json.load(file)
     
-    print("House is valid.")
-    return True
+    rooms = ["living_room", "bedroom", "bathroom"]
+    ui_data = [
+        (ui["number_of_living_rooms"],ui["living_rooms_plus?"]),
+        (ui["number_of_bedrooms"],ui["bathrooms_plus?"]),
+        (ui["number_of_bathrooms"],ui["bathrooms_plus?"]),
+    ]
+    for i, room in enumerate(rooms):
+        if model.g.num_nodes(room) < ui_data[i][0]:
+            issues.add("Too few " + room + "s")
+            continue
+        elif model.g.num_nodes(room) > ui_data[i][0] and ui_data[i][1] == False:
+            issues.add("Too many " + room + "s")
+            continue
+
+    # Check edge features
+        # Check if feature[0] is in range(3)
+        # Check if feature[1] is in range(9)
+        # Per room (not exterior wall) check feature 1's for all connected edges to confirm that 
+        #   together they "bound" the room (should have one each from "N", "S", "W", and "E"), 
+        #   where "N" is a list that includes "NW", "N", and "NE". We have identified that this system 
+        #   is not fool-proof, in that, it is theoretically possible in the training data to have to border 
+        #   rooms whose centroids are so far apart that there are no room adjaceny edges in a direction (N, S, E, W).
+        #   We figure that the percentage of ground truth floor plans creating training graphs with this flaw 
+        #   will be very low. If our own generated graphs show an equally low percentage, then clearly the model
+        #   has learned to properly predict edge features.
+    room_types_sans_EW = g.ntypes.copy()
+    room_types_sans_EW.remove("exterior_wall")
+    for room_type in room_types_sans_EW:
+        for src in range(g.num_nodes(room_type)):
+            for cet in g.canonical_etypes:
+                if cet[0] != room_type or cet[1] == "corner_edge":
+                    continue
+                out_degrees = g.out_degrees(u=src, etype=cet)
+                if out_degrees > 0:
+                    total_out_degrees += out_degrees
+                    # print(f"Room Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
+            if not total_out_degrees >= 2:
+                issues.add("One or more Rooms do not connect to minimum 2 other rooms")
+                break
+    
+    if not issues:
+        print("House is valid.")
+        return True
+    else:
+        print("Issues with home:")
+        for issue in issues:
+            print(issue)
+        return False
 
 
 def generate_home_dataset(g, num_homes):
@@ -226,9 +286,10 @@ def generate_home_dataset(g, num_homes):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, user_input_folder, partial_seq_path, complete_seq_path):
+    def __init__(self, user_input_folder, partial_seq_path=None, complete_seq_path=None, eval_only=False):
         super(CustomDataset, self).__init__()
 
+        self.eval_only = eval_only
         self.file_names = {}
         self.files = []
         with os.scandir(user_input_folder) as dir:
@@ -236,14 +297,16 @@ class CustomDataset(Dataset):
                 self.file_names[int(entry.name[:-5])] = entry.path
 
         self.files = list(OrderedDict(sorted(self.file_names.items())).values())
-        self.partial_seq = None
-        self.complete_seq = None
+        
+        if not self.eval_only:
+            self.partial_seq = None
+            self.complete_seq = None
 
-        with open(partial_seq_path, "rb") as partial:
-            self.partial_seq = pickle.load(partial)
+            with open(partial_seq_path, "rb") as partial:
+                self.partial_seq = pickle.load(partial)
 
-        with open(complete_seq_path, "rb") as complete:
-            self.complete_seq = pickle.load(complete)
+            with open(complete_seq_path, "rb") as complete:
+                self.complete_seq = pickle.load(complete)
 
     def __len__(self):
         return len(self.files)
@@ -253,9 +316,12 @@ class CustomDataset(Dataset):
         # user_input = None
         # with open(self.files[index], "rb") as input:
         #     user_input = json.load(input)
-        partial_seq = self.partial_seq[index]
-        complete_seq = self.complete_seq[index]
-        return (user_input_path, partial_seq, complete_seq)
+        if not self.eval_only:
+            partial_seq = self.partial_seq[index]
+            complete_seq = self.complete_seq[index]
+            return (user_input_path, partial_seq, complete_seq)
+        else:
+            return user_input_path
 
     def collate_single(self, batch):
         assert len(batch) == 1, "Currently we do not support batched training"
@@ -324,7 +390,7 @@ class HouseModelEvaluation(object):
         return sampled_graph
 
     
-    def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None):
+    def rollout_and_examine(self, model, num_samples, epoch=None, eval_it=None, data_it=None, run=None, lifull_num=None):
         try:    
             assert not model.training, "You need to call model.eval()."
 
@@ -357,9 +423,24 @@ class HouseModelEvaluation(object):
 
                 graphs_to_plot.append(sampled_graph)
 
+                if epoch is None:
+                    dgl.save_graphs(f"./eval_graphs/{lifull_num}/dgmg_eval_{eval_it}_graph_{i}.bin", [sampled_graph])
+
+                    # Uncomment to examine filled graph structure
+                    with open(f"./eval_graphs/{lifull_num}/graph_data_eval_{eval_it}_graph_{i}.txt", "w") as file:
+                        file.write(f"Graph {i}\n\n")
+                        for c_et in sampled_graph.canonical_etypes:
+                            if sampled_graph.num_edges(c_et) > 0:
+                                file.write(f"Edge numbers: {c_et} : {sampled_graph.num_edges(c_et)}\n")
+                                file.write(f"Edge features: {c_et} :\n {sampled_graph.edges[c_et].data['e']}\n")
+                        for nt in sampled_graph.ntypes:
+                            if sampled_graph.num_nodes(nt) > 0:
+                                file.write(f"Node features: {nt} :\n {sampled_graph.nodes[nt].data}\n")
+
+
                 graph_size = sampled_graph.num_nodes()
                 valid_size = self.v_min <= graph_size <= self.v_max
-                house = check_house(sampled_graph)
+                house = check_house(model)
 
                 num_total_size += graph_size
 
@@ -375,27 +456,32 @@ class HouseModelEvaluation(object):
                 if valid_size and house:
                     num_valid += 1
 
-                if len(graphs_to_plot) >= 1:
-                    plot_times += 1
-                    fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-                    g = graphs_to_plot[0]
-                    labels, colors = assign_node_labels_and_colors(g)
-                    G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
-                    nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-                    os.makedirs(self.dir, exist_ok=True)
-                    os.makedirs(self.dir + "/samples/epoch_{:d}/eval_{:d}/".format(epoch, eval_it), exist_ok=True)
-                    if epoch is not None:
-                        plt.savefig(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                        plt.close()
-                        run.save(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
-                    else:
-                        plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
-                        if run:
-                            run.save(self.dir + "/samples_{:d}.png".format(plot_times))
+            if len(graphs_to_plot) >= 1:
+                plot_times += 1
+                fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+                g = graphs_to_plot[0]
+                labels, colors = assign_node_labels_and_colors(g)
+                G = dgl.to_networkx(dgl.to_homogeneous(g.cpu()))
+                nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
+                os.makedirs(self.dir, exist_ok=True)
+                os.makedirs(self.dir + f"/samples/epoch_{epoch}/eval_{eval_it}/", exist_ok=True)
+                if epoch is not None:
+                    plt.savefig(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                    plt.close()
+                    run.save(self.dir + "/samples/epoch_{:d}/eval_{:d}/data_{:d}_gen_{:d}.png".format(epoch, eval_it, data_it, plot_times))
+                else:
+                    plt.savefig(self.dir + "/samples_{:d}.png".format(plot_times))
+                    if run:
+                        run.save(self.dir + "/samples_{:d}.png".format(plot_times))
 
-                        plt.close()
+                    plt.close()
+                    # graphs_to_plot.append(model.g)
+                # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
 
-                    graphs_to_plot = []
+                if epoch is None:
+                    plot_eval_graphs(f"./eval_graphs/{lifull_num}/", graphs_to_plot, eval_it)
+
+                graphs_to_plot = []
 
             self.num_samples_examined = num_samples
             self.average_size = num_total_size / num_samples
@@ -405,7 +491,7 @@ class HouseModelEvaluation(object):
         except Exception as e:
             print(f"Rollout error... {e}")
 
-    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None):
+    def write_summary(self, epoch=None, eval_it=None, data_it=None, run=None, cli_only=False, lifull_num=None):
         def _format_value(v):
             if isinstance(v, float):
                 return "{:.4f}".format(v)
@@ -428,20 +514,23 @@ class HouseModelEvaluation(object):
             if epoch:
                 model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
             else:
-                model_eval_path = os.path.join(self.dir, f"model_eval.txt")
+                model_eval_path = os.path.join(f"./eval_graphs/{lifull_num}/", f"model_eval.txt")
 
 
             print("\nModel evaluation summary:")
             with open(model_eval_path, "w") as f:
                 for key, value in statistics.items():
                     msg = "{}\t{}\n".format(key, _format_value(value))
-                    f.write(msg)
+                    if not cli_only:
+                        f.write(msg)        
                     print(msg)
 
-            print("\nSaved model evaluation statistics to {}".format(model_eval_path))
+            if not cli_only:
+                print("\nSaved model evaluation statistics to {}".format(model_eval_path))
             
-            if run:
+            if run is not None:
                 run.save(model_eval_path)
+        
         except Exception as e:
             print(f"Summary writer error... {e}")
 
@@ -497,7 +586,7 @@ def assign_node_labels_and_colors(g):
 
     return labels, colors
 
-def plot_and_save_graphs(dir, graphs_to_plot):
+def plot_eval_graphs(dir, graphs_to_plot, eval_it=None):
     options = {
         "node_size": 300,
         "width": 1,
@@ -506,11 +595,10 @@ def plot_and_save_graphs(dir, graphs_to_plot):
         "font_color": "r",
     }
 
-    for i, graph in enumerate(graphs_to_plot):
+    for i, g in enumerate(graphs_to_plot):
         fig, ax = plt.subplots(1, 1, figsize=(15, 7))
-        g = graphs_to_plot[i]
         labels, colors = assign_node_labels_and_colors(g)
         G = dgl.to_networkx(dgl.to_homogeneous(g))
         nx.draw(G, ax=ax, node_color=colors, labels=labels, **options)
-        plt.savefig(dir + "{:d}".format(i))
+        plt.savefig(dir + f"eval_{eval_it}_graph_{i}")
         plt.close()
