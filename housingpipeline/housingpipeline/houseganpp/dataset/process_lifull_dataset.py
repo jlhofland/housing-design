@@ -46,9 +46,9 @@ import matplotlib.pyplot as plt
 
 original_data_path = 'housingpipeline\housingpipeline\houseganpp\dataset\housegan_clean_data.npy'
 
-new_data_path_train = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data.npy'
-new_data_path_eval = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_eval_data.npy'
-new_data_path_test = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_test_data.npy'
+new_data_path_train = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data_filtered.p'
+new_data_path_eval = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_eval_data_filtered.p'
+new_data_path_test = 'housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_test_data_filtered.p'
 
 
 data = np.load(original_data_path, allow_pickle=True)
@@ -120,12 +120,6 @@ def edge_length(edge):
     ''' Returns edge length '''
     x0, y0, x1, y1 = edge
     return np.sqrt((x1-x0)**2 + (y1-y0)**2)
-    # if abs(x0 - x1) <= 3:
-    #     return abs(y1-y0)
-    # if abs(y0 - y1) <= 3:
-    #     return abs(x1-x0)
-    # else:
-    #     return np.sqrt((x1-x0)^2 + (y1-y0)^2) # For edges that are at a too large slope, return adge length with pythagoras
 
 def give_edge_width_1(edge):
     ''' Gives the bounding box of an edge width 1 '''
@@ -217,7 +211,7 @@ def find_angle_EW(EW1, EW2):
 
 
 
-# # Was used for plotting
+# # Used for plotting
 # def find_approximate_centroid(room_idx, house_edges, house_edge_adjacencies):
 #     # room_idx = data[house_nr][0].index(room_type)
 #     room_edge_ids = [id for id, edge in enumerate(house_edge_adjacencies) if room_idx in edge]
@@ -242,6 +236,13 @@ new_data = []
 nr_homes = 0 # used for restricting amount of homes processed
 home_data_length = len(data)
 for home in data:
+
+    # Only add to list if all room types are not of type 0
+    faulty_home = False
+    for RoomType in home[0]:
+        if RoomType == 0.:
+            faulty_home = True
+    
 
     # # Retrieve house-specific data
     # room_types = np.array(home[0])
@@ -387,14 +388,30 @@ for home in data:
     for bb in range(len(bbs)):
         bbs[bb] = give_edge_width_1(bbs[bb])
 
-    new_data.append([bbs, nds, eds, edges_f])
+    
+    # Check for EW that are not alligned with axis or bb is too big (then it is a faulty home)
+    for ewbb in bbs[len(rooms):]:
+        xx0, yy0, xx1, yy1 = ewbb
+        xx0 = xx0 * 256
+        yy0 = yy0 * 256
+        xx1 = xx1 * 256
+        yy1 = yy1 * 256
+        Height = xx1 - xx0
+        Width = yy1 - yy0
+        if Width > 1 and Height > 1:
+            faulty_home = True
 
+    # If not a faulty home, add to list
+    if faulty_home == False:
+        new_data.append([bbs, nds, eds, edges_f])
+    
     nr_homes = nr_homes + 1
     print(f'{nr_homes} out of {home_data_length}')
     # if nr_homes == 1: # amount of rooms we want in the list
     #     break
 
 
+print(len(new_data))
 
 # Finally, save the list:
 
