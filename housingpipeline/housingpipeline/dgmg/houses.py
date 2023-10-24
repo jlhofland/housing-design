@@ -7,12 +7,14 @@ import torch
 import json
 import wandb
 from collections import OrderedDict
+from utils import dgl_to_graphlist, graph_direction_distribution, room_without_doors
 
 
 import matplotlib.pyplot as plt
 import networkx as nx
 from torch.utils.data import Dataset
 
+lifull_data_distribution = [0, 3.3926383920000003e-04, 5.467806213999999e-03, 6.611541502e-02, 9.280775147999998e-01]
 
 def check_house(model):
     g = model.g
@@ -94,14 +96,6 @@ def check_house(model):
     # Check edge features
         # Check if feature[0] is in range(3)
         # Check if feature[1] is in range(9)
-        # Per room (not exterior wall) check feature 1's for all connected edges to confirm that 
-        #   together they "bound" the room (should have one each from "N", "S", "W", and "E"), 
-        #   where "N" is a list that includes "NW", "N", and "NE". We have identified that this system 
-        #   is not fool-proof, in that, it is theoretically possible in the training data to have to border 
-        #   rooms whose centroids are so far apart that there are no room adjaceny edges in a direction (N, S, E, W).
-        #   We figure that the percentage of ground truth floor plans creating training graphs with this flaw 
-        #   will be very low. If our own generated graphs show an equally low percentage, then clearly the model
-        #   has learned to properly predict edge features.
     room_types_sans_EW = g.ntypes.copy()
     room_types_sans_EW.remove("exterior_wall")
     for room_type in room_types_sans_EW:
@@ -117,6 +111,26 @@ def check_house(model):
                 issues.add("One or more Rooms do not connect to minimum 2 other rooms")
                 break
     
+    # Per room (not exterior wall) check feature 1's for all connected edges to confirm that 
+        #   together they "bound" the room (should have one each from "N", "S", "W", and "E"), 
+        #   where "N" is a list that includes "NW", "N", and "NE". We have identified that this system 
+        #   is not fool-proof, in that, it is theoretically possible in the training data to have to border 
+        #   rooms whose centroids are so far apart that there are no room adjaceny edges in a direction (N, S, E, W).
+        #   We will therefor create a list per house that shows the percentage of rooms where there are
+        #   [0,1,2,3,4] of the directions connected. We will compare this value to the overall distribution
+        #   of the LIFULL dataset and check whether the found distribution is close enough to the LIFULL distribution (20%).
+
+    graphlist = dgl_to_graphlist(g)
+    graph_distribution = graph_direction_distribution(graphlist)
+    
+    for i,percentage in enumerate(graph_distribution):
+        if abs(percentage - lifull_data_distribution[i]) > 0.2 * lifull_data_distribution[i]:
+            issues.add("Room direction distribution is too far of the lifull distribution")
+    
+    # Checks whether every room in the house has a door (either to another room or connected to exterior wall with a door)
+    if not room_without_doors(graphlist):
+        issues.add("There is a room with no doors")
+
     if not issues:
         print("House is valid.")
         return True
