@@ -10,6 +10,7 @@ from copy import deepcopy
 
 from housingpipeline.floor_plan_pipeline.input_to_graph import create_graph_from_user_input
 from housingpipeline.floor_plan_pipeline.graph_to_floorplan import create_floorplan_from_graph
+from housingpipeline.dgmg.utils import dgl_to_graphlist
 
 # from .input_to_graph import create_graph_from_user_input
 
@@ -17,20 +18,21 @@ from housingpipeline.floor_plan_pipeline.graph_to_floorplan import create_floorp
 def main(args):
     os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
-    # g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
+    g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
     # dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
+    graph_list = dgl_to_graphlist(g)
     # print(g)
     with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
         sample_graph_list = pickle.load(file)
 
     # Make a copy of the graph list
     floorplan_ok = False
-    total_graph_copy = deepcopy(sample_graph_list)
+    total_graph_copy = deepcopy(graph_list)
 
     # Loop till user is satisfied with floorplan
     while not floorplan_ok:
         # Create plan
-        create_floorplan_from_graph(graph=sample_graph_list, model_path=args["hhgpp_path"], output_path=args["output_path"])
+        create_floorplan_from_graph(graph=graph_list, model_path=args["hhgpp_path"], output_path=args["output_path"])
 
         # Open image
         plan = Image.open(args["output_path"] + "/final_pipeline_floorplan.png")
@@ -43,7 +45,7 @@ def main(args):
             print("Amazing your floorplan is ready and saved in the output folder.")
         elif response == "regenerate":
             plan.close()
-            sample_graph_list = deepcopy(total_graph_copy)
+            graph_list = deepcopy(total_graph_copy)
             print("Alright generating a new floorplan.")
         elif response == "stop":
             print("No problem, try again next time. Byeee")
@@ -72,7 +74,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="./pretrained_models/dgmg_state_dict.pth",
+        default="./pretrained_models/dgmg_model_epoch_1_batch_2520.pth",
         help="full path to pretained dgmg model",
     )
 

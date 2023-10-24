@@ -284,7 +284,7 @@ def one_hot_embedding(labels, num_classes=11):
     """
     y = torch.eye(num_classes)
     # print(" label is",labels)
-    return y[labels.int()]
+    return y[labels.to(dtype=torch.long)]
 
 
 def dgl_to_graphlist(g):

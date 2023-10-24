@@ -7,7 +7,7 @@ import torch
 import json
 import wandb
 from collections import OrderedDict
-from utils import dgl_to_graphlist, graph_direction_distribution, room_without_doors
+from housingpipeline.dgmg.utils import dgl_to_graphlist, graph_direction_distribution, room_without_doors
 
 
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 lifull_data_distribution = [0, 3.3926383920000003e-04, 5.467806213999999e-03, 6.611541502e-02, 9.280775147999998e-01]
 
-def check_house(model):
+def check_house(model, quiet=False):
     g = model.g
     issues = set()
     # Assert that each exterior wall is connected to at least one other room besides its single outgoing connecting wall edge
@@ -132,12 +132,15 @@ def check_house(model):
         issues.add("One or more rooms have no doors")
 
     if not issues:
-        print("House is valid.")
+        if not quiet:
+            print("House is valid.")
         return True
     else:
-        print("Issues with home:")
-        for issue in issues:
-            print(issue)
+        if not quiet:
+            print("House failed.")
+            print("Issues with home:")
+            for issue in issues:
+                print(issue)
         return False
 
 
@@ -399,7 +402,7 @@ class HouseModelEvaluation(object):
         assert not model.training, "You need to call model.eval()."
         found_one = False
         while not found_one:
-            sampled_graph = model(user_interface=True)
+            sampled_graph = model.forward_pipeline(user_interface=True)
             found_one = check_house(model)
         return sampled_graph
 

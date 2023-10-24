@@ -20,3 +20,6 @@ housingpipeline\housingpipeline\houseganpp\dataset\HHGPP_train_data.npy
 housingpipeline\housingpipeline\houseganpp\dataset\housegan_clean_data.npy
 housingpipeline/housingpipeline/dgmg/eval_graphs/
 housingpipeline/housingpipeline/floor_plan_pipeline/misc/dgmg_graph*
+housingpipeline/housingpipeline/floor_plan_pipeline/tmp/
+housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models
+housingpipeline/housingpipeline/dgmg/model.pth
