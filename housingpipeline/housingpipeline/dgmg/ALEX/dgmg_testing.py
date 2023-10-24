@@ -4,40 +4,65 @@ os.environ["DGLBACKEND"] = "pytorch"
 import dgl
 import numpy as np
 import torch
+import time
+import pickle
+import _pickle as cPickle
 
-g : dgl.DGLGraph = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_6.bin")[0][0]
+g : dgl.DGLGraph = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_0.bin")[0][0]
 
-src_types = dict()
-src_etypes = dict()
-for cet in g.canonical_etypes:
-    src = cet[0]
-    if src == "exterior_wall": continue
-    if g.num_edges(cet) == 0: continue
-    print(f"Num {cet} = {g.num_edges(cet)}")
-    if src not in src_types.keys():
-        src_types[src] = g.num_nodes(src)
-    if src not in src_etypes.keys():
-        src_etypes[src] = set()
-    src_etypes[src].add(cet)
+t1 = time.time()
+with open("./test_graph.p", "wb") as file:
+    pickle.dump(g, file)
+with open("./test_graph.p", "rb") as file:
+    pickle.load(file)
+t2 = time.time()
 
-print(f"Source types: {src_types}")
-for src in src_etypes.keys():
-    print(f"{src}:")
-    for cet in src_etypes[src]:
-        print(cet)
-    # print(src_etypes[src])
+t3 = time.time()
+with open("./test_graph.p", "wb") as file:
+    cPickle.dump(g, file)
+with open("./test_graph.p", "rb") as file:
+    cPickle.load(file)
+t4 = time.time()
 
-print("\n")
-for src in src_types.keys():
-    if src != 'corridor': continue
-    for src_id in range(src_types[src]):
-        if src_id > 0: continue
-        print(f"Source {src} ID {src_id}")
-        for cet in src_etypes[src]:
-            src_out_edges = g.out_edges(src_id, etype=cet)
-            if src_out_edges[0].shape[0] != 0:
-                print(cet)
-                print(src_out_edges)
+t5 = time.time()
+dgl.save_graphs("./test_graph.p", g)
+dgl.load_graphs("./test_graph.p")[0][0]
+t6 = time.time()
+
+print(t2-t1)
+print(t4-t3)
+print(t6-t5)
+# src_types = dict()
+# src_etypes = dict()
+# for cet in g.canonical_etypes:
+#     src = cet[0]
+#     if src == "exterior_wall": continue
+#     if g.num_edges(cet) == 0: continue
+#     print(f"Num {cet} = {g.num_edges(cet)}")
+#     if src not in src_types.keys():
+#         src_types[src] = g.num_nodes(src)
+#     if src not in src_etypes.keys():
+#         src_etypes[src] = set()
+#     src_etypes[src].add(cet)
+
+# print(f"Source types: {src_types}")
+# for src in src_etypes.keys():
+#     print(f"{src}:")
+#     for cet in src_etypes[src]:
+#         print(cet)
+#     # print(src_etypes[src])
+
+# print("\n")
+# for src in src_types.keys():
+#     if src != 'corridor': continue
+#     for src_id in range(src_types[src]):
+#         if src_id > 0: continue
+#         print(f"Source {src} ID {src_id}")
+#         for cet in src_etypes[src]:
+#             src_out_edges = g.out_edges(src_id, etype=cet)
+#             if src_out_edges[0].shape[0] != 0:
+#                 print(cet)
+#                 print(src_out_edges)
 
 # print(src_etypes)
 # for src in src_types:
