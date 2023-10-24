@@ -9,6 +9,10 @@ g : dgl.DGLGraph = dgl.load_graphs("housingpipeline/housingpipeline/dgmg/example
 
 hg = dgl.to_homogeneous(g, edata=['e'], store_type=True, return_count=True)
 
+nodes_dict = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
+connection_dict = {"corner_edge": 0, "room_adjacency_edge": 1}
+
+
 
 def one_hot_embedding(labels, num_classes=11):
     """Embedding labels to one-hot form.
@@ -22,59 +26,68 @@ def one_hot_embedding(labels, num_classes=11):
     """
     y = torch.eye(num_classes)
     # print(" label is",labels)
-    return y[labels]
+    return y[labels.int()]
 
 
-src_types = dict()
-src_etypes = dict()
-for cet in g.canonical_etypes:
-    src = cet[0]
-    if src == "exterior_wall": continue
-    if g.num_edges(cet) == 0: continue
-    print(f"Num {cet} = {g.num_edges(cet)}")
-    if src not in src_types.keys():
-        src_types[src] = g.num_nodes(src)
-    if src not in src_etypes.keys():
-        src_etypes[src] = set()
-    src_etypes[src].add(cet)
+# src_types = dict()
+# src_etypes = dict()
+# for cet in g.canonical_etypes:
+#     src = cet[0]
+#     if src == "exterior_wall": continue
+#     if g.num_edges(cet) == 0: continue
+#     print(f"Num {cet} = {g.num_edges(cet)}")
+#     if src not in src_types.keys():
+#         src_types[src] = g.num_nodes(src)
+#     if src not in src_etypes.keys():
+#         src_etypes[src] = set()
+#     src_etypes[src].add(cet)
 
-print(f"Source types: {src_types}")
-for src in src_etypes.keys():
-    print(f"{src}:")
-    for cet in src_etypes[src]:
-        print(cet)
-    # print(src_etypes[src])
+# print(f"Source types: {src_types}")
+# for src in src_etypes.keys():
+#     print(f"{src}:")
+#     for cet in src_etypes[src]:
+#         print(cet)
+#     # print(src_etypes[src])
 
-print("\n")
-for src in src_types.keys():
-    if src != 'corridor': continue
-    for src_id in range(src_types[src]):
-        if src_id > 0: continue
-        print(f"Source {src} ID {src_id}")
-        for cet in src_etypes[src]:
-            src_out_edges = g.out_edges(src_id, etype=cet)
-            if src_out_edges[0].shape[0] != 0:
-                print(cet)
-                print(src_out_edges)
+# print("\n")
+# for src in src_types.keys():
+#     if src != 'corridor': continue
+#     for src_id in range(src_types[src]):
+#         if src_id > 0: continue
+#         print(f"Source {src} ID {src_id}")
+#         for cet in src_etypes[src]:
+#             src_out_edges = g.out_edges(src_id, etype=cet)
+#             if src_out_edges[0].shape[0] != 0:
+#                 print(cet)
+#                 print(src_out_edges)
 
 
-
-nodes_dict = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
-connection_dict = {"corner_edge": 0, "room_adjacency_edge": 1}
 
 # Transform dgl graph into graphlist format
 nds = []
 eds = []
 eds_f = []
 
-names_node_types = g.ntypes # gives node names
-ids_node_types = hg[0].ndata['_TYPE'] # gives list of the nodes represented by node type number
 ew_features = g.nodes['exterior_wall'].data['hf'] # Gives edge features (list of 2 entries per edge)
 
-node_type_counts = hg[1] # Number of nodes per type
-num_nodes = torch.sum(torch.tensor(node_type_counts)).item() # Total number of nodes
-canon_etype_counts = hg[2] # Number of edges per type
-num_edges = torch.sum(torch.tensor(canon_etype_counts)).item() # Total number of edges
+ids_nodes = []
+
+for key in g.ndata.get('a').keys():
+    keyamount = len(g.ndata.get('a').get(key))
+    while keyamount > 0:
+        ids_nodes.append(key)
+        keyamount += -1
+
+ids_node_types = []
+
+for item in ids_nodes:
+    ids_node_types.append(int(nodes_dict.get(item)))
+ids_node_types = torch.Tensor(ids_node_types)
+
+#node_type_counts = hg[1] # Number of nodes per type
+#num_nodes = torch.sum(torch.tensor(node_type_counts)).item() # Total number of nodes
+#canon_etype_counts = hg[2] # Number of edges per type
+#num_edges = torch.sum(torch.tensor(canon_etype_counts)).item() # Total number of edges
 
 '''
 Create node feature tensor
@@ -82,19 +95,18 @@ Create node feature tensor
 # create empty node feature tensor
 nds_f = torch.full((ids_node_types.shape[0],2), fill_value = -1.0)
 # find nodetype id of EW's
-ew_type_id = names_node_types.index('exterior_wall')
+ew_type_id = nodes_dict.get('exterior_wall')
 # find node ids of EW's
 ew_ids = torch.argwhere(ids_node_types == ew_type_id).flatten()
 # insert ew nd features
 nds_f[ew_ids] = ew_features
-
 '''
 Create one-hot'd node type tensor
 '''
 nds_t = one_hot_embedding(labels=ids_node_types, num_classes=len(g.ntypes))
 
 # Swap node type id numbers to what is used to train HHGPP: {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
-nds_t[:,[0,1,2,3,4,5,6,7,8,9,10]] = nds_t[:,[6,9,7,2,1,10,3,0,4,5,8]]
+# nds_t[:,[0,1,2,3,4,5,6,7,8,9,10]] = nds_t[:,[6,9,7,2,1,10,3,0,4,5,8]]
 
 '''
 Create final nds list

@@ -284,7 +284,8 @@ def one_hot_embedding(labels, num_classes=11):
     """
     y = torch.eye(num_classes)
     # print(" label is",labels)
-    return y[labels]
+    return y[labels.int()]
+
 
 def dgl_to_graphlist(g):
     ''' Converts dgl graph to listgraph format, outputs [nodes, edges, edge features] '''
@@ -292,38 +293,50 @@ def dgl_to_graphlist(g):
     nodes_dict = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
     connection_dict = {"corner_edge": 0, "room_adjacency_edge": 1}
 
-    hg = dgl.to_homogeneous(g, edata=['e'], store_type=True, return_count=True)
-
     nds = []
     eds = []
     eds_f = []
 
-    names_node_types = g.ntypes # gives node names
-    ids_node_types = hg[0].ndata['_TYPE'] # gives list of the nodes represented by node type number
     ew_features = g.nodes['exterior_wall'].data['hf'] # Gives edge features (list of 2 entries per edge)
 
-    node_type_counts = hg[1] # Number of nodes per type
-    num_nodes = torch.sum(torch.tensor(node_type_counts)).item() # Total number of nodes
-    canon_etype_counts = hg[2] # Number of edges per type
-    num_edges = torch.sum(torch.tensor(canon_etype_counts)).item() # Total number of edges
+    ids_nodes = []
 
+    for key in g.ndata.get('a').keys():
+        keyamount = len(g.ndata.get('a').get(key))
+        while keyamount > 0:
+            ids_nodes.append(key)
+            keyamount += -1
+
+    ids_node_types = []
+
+    for item in ids_nodes:
+        ids_node_types.append(int(nodes_dict.get(item)))
+    ids_node_types = torch.Tensor(ids_node_types)
+
+    '''
+    Create node feature tensor
+    '''
     # create empty node feature tensor
     nds_f = torch.full((ids_node_types.shape[0],2), fill_value = -1.0)
     # find nodetype id of EW's
-    ew_type_id = names_node_types.index('exterior_wall')
+    ew_type_id = nodes_dict.get('exterior_wall')
     # find node ids of EW's
     ew_ids = torch.argwhere(ids_node_types == ew_type_id).flatten()
     # insert ew nd features
     nds_f[ew_ids] = ew_features
-
-    # Create one-hot'd node type tensor
+    '''
+    Create one-hot'd node type tensor
+    '''
     nds_t = one_hot_embedding(labels=ids_node_types, num_classes=len(g.ntypes))
 
-    # Swap node type id numbers to what is used to train HHGPP: {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
-    nds_t[:,[0,1,2,3,4,5,6,7,8,9,10]] = nds_t[:,[6,9,7,2,1,10,3,0,4,5,8]]
-
-    # Create final nds list    
+    '''
+    Create final nds list
+    '''
     nds = torch.concatenate([nds_t, nds_f], dim=1)
+
+    '''
+    Create initial edge tensor with all edges (from_id, -1, to_id)
+    '''
 
     # Create eds list of all connections with -1 (no edge)
     # and create empty/default eds_f list with in and out node id entries will be omitted later, but for used for filling the list)
@@ -347,8 +360,10 @@ def dgl_to_graphlist(g):
             if room_exists == 1:
                 break
 
+    '''
+    Fill the eds and eds_f lists
+    '''
 
-    # Fill the eds and eds_f lists
     for etype in g.canonical_etypes:
         from_node, connection_type, to_node = etype
         from_node = nodes_dict.get(from_node)
@@ -373,14 +388,16 @@ def dgl_to_graphlist(g):
                         eds_f[ed_number][2] = edge_feature2
 
 
+
     return [nds, eds, eds_f]
+
 
 def graph_direction_distribution(graphlist):
     ''' Calculates the distributions for the number of wind directions checked per room.
     Takes graphlist and returns list with 5 entries for the percentage of 0,1,2,3,4 directions checked. '''
 
     num_directions_per_room = []
-    for i, room in enumerate(graphlist[1]): # Check each room
+    for i, room in enumerate(graphlist[0]): # Check each room
         room_direction_list = []
         num_directions = 0
         North = 0
@@ -389,10 +406,10 @@ def graph_direction_distribution(graphlist):
         West = 0
 
         if room[0] == 0.: # Not EW
-            for j,edge in enumerate(graphlist[2]): # Check each edge
+            for j,edge in enumerate(graphlist[1]): # Check each edge
                 if edge[1] == 1: # If edge exists
                     if edge[0] == i: # If edge is from given room
-                        room_direction_list.append(graphlist[3][j][2])
+                        room_direction_list.append(graphlist[2][j][2])
             
             for direction in room_direction_list:
                 if direction in {7,0,1}: # direction is SE, E, NE
@@ -416,15 +433,15 @@ def room_without_doors(graphlist):
     ''' Input graphlist, returns True/False whether there is a room with no doors '''
 
     room_without_door_counter = 0
-    for i, room in enumerate(graphlist[1]): # Check each room
+    for i, room in enumerate(graphlist[0]): # Check each room
         room_has_door = False
         if room[0] == 0.:
-            for edg in graphlist[2]:
+            for edg in graphlist[1]:
                 if edg[0] == i: # If edge is from room
-                    if graphlist[3][i][1] == 0: # If edge has door
+                    if graphlist[2][i][1] == 0: # If edge has door
                         room_has_door = True
-                    if graphlist[1][edg[2]][0] == 0.: # To node is exterior wall
-                        if graphlist[1][edg[2]][12] == 1:
+                    if graphlist[0][edg[2]][0] == 0.: # To node is exterior wall
+                        if graphlist[0][edg[2]][12] == 1:
                             room_has_door = True
             if not room_has_door:
                 room_without_door_counter += 1
