@@ -84,7 +84,7 @@ def setup(args):
     opts["log_dir"] = log_dir
     mkdir_p(log_dir + "/samples")
 
-    plt.switch_backend("Agg")
+    # plt.switch_backend("Agg")
 
     save_arg_dict(opts)
     pprint(opts)

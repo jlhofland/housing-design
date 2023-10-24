@@ -385,8 +385,8 @@ class HouseModelEvaluation(object):
         assert not model.training, "You need to call model.eval()."
         found_one = False
         while not found_one:
-            sampled_graph = model()
-            found_one = check_house(sampled_graph)
+            sampled_graph = model(user_interface=True)
+            found_one = check_house(model)
         return sampled_graph
 
     
@@ -511,7 +511,7 @@ class HouseModelEvaluation(object):
         }
 
         try:
-            if epoch:
+            if epoch is not None:
                 model_eval_path = os.path.join(self.dir, f"model_eval_epoch_{epoch}_eval_{eval_it}_data_{data_it}.txt")
             else:
                 model_eval_path = os.path.join(f"./eval_graphs/{lifull_num}/", f"model_eval.txt")
