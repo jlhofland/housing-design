@@ -47,6 +47,7 @@ def get_legend_elements():
 def assign_node_labels_and_colors(g):
     colors = []
     labels = {}
+    walls = []
 
     # Get node-type order
     node_type_order = g.ntypes
@@ -59,7 +60,7 @@ def assign_node_labels_and_colors(g):
             node_type_dict[node] + str(int(g_homo.ndata[dgl.NID][idx]))
         )
         colors.append(color_dict[node_type_order[node]])
-    options = {
-
-    }
-    return labels, colors
+        if node_type_dict[node] == "EW":
+            walls.append(idx)
+    
+    return labels, colors, walls
