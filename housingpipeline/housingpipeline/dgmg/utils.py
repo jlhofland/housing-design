@@ -413,7 +413,7 @@ def graph_direction_distribution(graphlist):
     return room_distribution
 
 def room_without_doors(graphlist):
-    ''' Input graphlist, returns True/False whether all rooms have a door or not '''
+    ''' Input graphlist, returns True/False whether there is a room with no doors '''
 
     room_without_door_counter = 0
     for i, room in enumerate(graphlist[1]): # Check each room
@@ -429,4 +429,4 @@ def room_without_doors(graphlist):
             if not room_has_door:
                 room_without_door_counter += 1
 
-    return room_without_door_counter == 0
+    return room_without_door_counter > 0

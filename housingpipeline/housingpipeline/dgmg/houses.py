@@ -128,7 +128,7 @@ def check_house(model):
             issues.add("Room direction distribution is too far of the lifull distribution")
     
     # Checks whether every room in the house has a door (either to another room or connected to exterior wall with a door)
-    if not room_without_doors(graphlist):
+    if room_without_doors(graphlist):
         issues.add("There is a room with no doors")
 
     if not issues:
