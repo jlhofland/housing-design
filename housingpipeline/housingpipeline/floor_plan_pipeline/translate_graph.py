@@ -156,6 +156,8 @@ Make list and save the graphlist to pickled file
 
 graphlist = [nds, eds, eds_f]
 
+print(graphlist)
+
 with open(graphlist_output_path, 'wb') as f:
   pickle.dump(graphlist,f)
   f.close()
