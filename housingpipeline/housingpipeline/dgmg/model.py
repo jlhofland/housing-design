@@ -2,6 +2,7 @@ from functools import partial
 from housingpipeline.dgmg.utils import parse_input_json, tensor_to_one_hot
 from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset
 import housingpipeline.dgmg.draw_graph_help as draw_graph_help
+from housingpipeline.dgmg.graph_vis_test import show_graph
 
 import os
 import dgl
@@ -1105,24 +1106,7 @@ class DGMG(nn.Module):
 
             # Loop until user is satisfied with the graph or exits
             while not partial_ok:
-                # Add legenda to plot
-                plt.figure(figsize=(10, 10))
-                plt.legend(
-                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
-
-                # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(
-                    self.g)
-
-                # Translate to Homogeneous graph
-                hg = dgl.to_homogeneous(self.g)
-
-                # Convert to networkx
-                ng = hg.to_networkx()
-
-                # Draw the graph
-                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-                plt.show(block=False)
+                show_graph(self.g, self.user_input_path)
 
                 # Ask the user if the plot is correct
                 response = input(
@@ -1168,24 +1152,7 @@ class DGMG(nn.Module):
                 # forward inference
                 self.forward_inference()
 
-                # Add legenda to plot
-                plt.figure(figsize=(10, 10))
-                plt.legend(
-                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
-
-                # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(
-                    self.g)
-
-                # Translate to Homogeneous graph
-                hg = dgl.to_homogeneous(self.g)
-
-                # Convert to networkx
-                ng = hg.to_networkx()
-
-                # Draw the graph
-                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-                plt.show(block=False)
+                show_graph(self.g, self.user_input_path)
 
                 # Ask the user if the plot is correct
                 response = input(
@@ -1193,7 +1160,7 @@ class DGMG(nn.Module):
                 if response == 'continue':
                     complete_ok = True
                 elif response == 'regenerate':
-                    self.g : dgl.DGLGraph = dgl.load_graphs("./empty_house_graph/empty_house_graph.bin")[0][0]
+                    self.g : dgl.DGLGraph = dgl.load_graphs("./tmp/partial_graph.bin")[0][0]
                 elif response == 'stop':
                     print("Exiting the program.")
                     exit()

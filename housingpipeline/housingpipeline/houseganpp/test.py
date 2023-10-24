@@ -8,7 +8,7 @@ import random
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
-from dataset.floorplan_dataset_maps_functional_high_res import FloorplanGraphDataset, floorplan_collate_fn
+from housingpipeline.houseganpp.dataset.floorplan_dataset_maps_functional_high_res import FloorplanGraphDataset, floorplan_collate_fn
 
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -20,10 +20,10 @@ import torch.autograd as autograd
 import torch
 from PIL import Image, ImageDraw, ImageFont
 import svgwrite
-from models.models import Generator
+from housingpipeline.houseganpp.models.models import Generator
 # from models.models_improved import Generator
 
-from misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph
+from housingpipeline.houseganpp.misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -35,8 +35,8 @@ import time
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_cpu", type=int, default=16, help="number of cpu threads to use during batch generation")
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
-parser.add_argument("--checkpoint", type=str, default='/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/exp_D_9.pth', help="checkpoint path")
-parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets", help="path to dataset list file")
+parser.add_argument("--checkpoint", type=str, default='/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/exp_D_60.pth', help="checkpoint path")
+parser.add_argument("--data_path", type=str, default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/mini_datasets", help="path to dataset list file")
 parser.add_argument("--out", type=str, default='./dump', help="output folder")
 opt = parser.parse_args()
 
@@ -80,6 +80,7 @@ def main():
         print("getting here")
         # draw real graph and groundtruth
         mks, nds, eds, eds_f, _, _ = sample
+        masks = Variable(mks.type(Tensor))
         # graph_sample = [mks, nds, eds, eds_f]
         # import pickle
         # import time
@@ -93,15 +94,15 @@ def main():
 
         # add room types incrementally
         _types = sorted(list(set(real_nodes))) # Set() also removes duplicates. So, it is a sorted list of unique node t
-        selected_types = [_types[:k+1] for k in range(10)] # [[0], [0,1], [0,1,3], ...]. Should it be range(10)? Or len(_types)..
+        selected_types = [_types[:k+1] for k in range(len(_types))] # [[0], [0,1], [0,1,3], ...]. Should it be range(10)? Or len(_types)..
         os.makedirs('./{}/'.format(opt.out), exist_ok=True)
         _round = 0
         
         # initialize layout
-        state = {'masks': None, 'fixed_nodes': []}
-        masks = _infer(graph, model, state)
-        im0 = draw_masks(masks.copy(), nds.numpy())
-        im0 = torch.tensor(np.array(im0).transpose((2, 0, 1)))/255.0 
+        state = {'masks': masks, 'fixed_nodes': []}
+        # masks = _infer(graph, model, state)
+        # im0 = draw_masks(masks.copy(), nds.numpy())
+        # im0 = torch.tensor(np.array(im0).transpose((2, 0, 1)))/255.0 
         # save_image(im0, './{}/fp_init_{}.png'.format(opt.out, i), nrow=1, normalize=False) # visualize init image
 
         # generate per room type
@@ -111,6 +112,8 @@ def main():
             _fixed_nds = np.concatenate([np.where(real_nodes == _t)[0] for _t in _types]) \
                 if len(_types) > 0 else np.array([]) 
             state = {'masks': masks, 'fixed_nodes': _fixed_nds}
+            # # Automagically skip first step to include node type 0 ("exterior walls") in the fixed nodes list
+            # if _iter == 0: continue
             masks = _infer(graph, model, state)
             
         # save final floorplans

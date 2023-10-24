@@ -15,10 +15,10 @@ from housingpipeline.floor_plan_pipeline.graph_to_floorplan import create_floorp
 
 
 def main(args):
-    # os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
+    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
-    g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
-    dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
+    # g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
+    # dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
     # print(g)
     with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
         sample_graph_list = pickle.load(file)
@@ -37,16 +37,19 @@ def main(args):
         plan.show()
 
         # Check if user is satisfied with floorplan
-        response = input("Is this floorplan ok? (yes/no): ").strip().lower()
-        if response == "yes":
+        response = input("Is this floorplan ok? Pick from (continue/regenerate/stop): ").strip().lower()
+        if response == "continue":
             floorplan_ok = True
             print("Amazing your floorplan is ready and saved in the output folder.")
-        elif response == "no":
+        elif response == "regenerate":
             plan.close()
             sample_graph_list = deepcopy(total_graph_copy)
             print("Alright generating a new floorplan.")
+        elif response == "stop":
+            print("No problem, try again next time. Byeee")
+            exit()
         else:
-            print("Invalid input. Please enter either 'yes' or 'no'.")
+            print("Invalid input. Please enter either 'continue', 'regenerate or 'stop'.")
 
 
 if __name__ == "__main__":
@@ -75,7 +78,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--hhgpp-path",
-        default="./pretrained_models/hhgpp_state_dict.pth",
+        default="./pretrained_models/exp_D_680000.pth",
         help="full path to pretrained hhgpp model",
     )
 

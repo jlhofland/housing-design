@@ -26,7 +26,7 @@ os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingp
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--n_epochs", type=int, default=100000, help="number of epochs of training"
+    "--n_epochs", type=int, default=100, help="number of epochs of training"
 )
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
 parser.add_argument("--g_lr", type=float, default=0.0001, help="adam: learning rate")
@@ -46,11 +46,11 @@ parser.add_argument(
 parser.add_argument(
     "--n_cpu",
     type=int,
-    default=1,
+    default=2,
     help="number of cpu threads to use during batch generation",
 )
 parser.add_argument(
-    "--sample_interval", type=int, default=10, help="interval between image sampling"
+    "--sample_interval", type=int, default=20, help="interval between image sampling"
 )
 parser.add_argument("--exp_folder", type=str, default="exp", help="destination folder")
 parser.add_argument(
@@ -62,7 +62,7 @@ parser.add_argument(
 parser.add_argument(
     "--status_print_interval",
     type=int,
-    default=2,
+    default=20,
     help="number of batches (of size 1..) between status prints",
 )
 parser.add_argument(
@@ -78,15 +78,30 @@ parser.add_argument(
     default="/home/evalexii/Documents/IAAIP/datasets/hhgpp_datasets/mini_datasets",
     help="path to the dataset",
 )
+
+# use checkpoint "restart" model
+parser.add_argument(
+    "--gen_restart_path",
+    type=str,
+    default=None,
+    help="specify a path to a nice model to use to jumpstart training",
+)
+parser.add_argument(
+    "--disc_restart_path",
+    type=str,
+    default=None,
+    help="specify a path to a nice model to use to jumpstart training",
+)
+
 parser.add_argument(
     "--lambda_gp", type=int, default=10, help="lambda for gradient penalty"
 )
 opt = parser.parse_args()
 
+# Initialize W and B logging
 wandb.login(key="023ec30c43128f65f73c0d6ea0b0a67d361fb547")
 wandb.init(project='Housing', config=vars(opt))
 print(f"offline mode: {wandb.run.settings._offline}")
-
 
 exp_folder = "{}_{}".format(opt.exp_folder, opt.target_set)
 os.makedirs("./exps/" + exp_folder, exist_ok=True)
@@ -97,8 +112,11 @@ distance_loss = torch.nn.L1Loss()
 
 # Initialize generator and discriminator
 generator = Generator()
-generator.load_state_dict(torch.load("./checkpoints/exp_D_20000.pth"))
+if opt.gen_restart_path is not None:
+    generator.load_state_dict(torch.load(opt.gen_restart_path))
 discriminator = Discriminator()
+if opt.disc_restart_path is not None:
+    discriminator.load_state_dict(torch.load(opt.disc_restart_path))
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
@@ -201,7 +219,7 @@ fp_dataset_test = FloorplanGraphDataset(
 
 fp_loader_test = torch.utils.data.DataLoader(
     fp_dataset_test,
-    batch_size=4,
+    batch_size=1,
     shuffle=False,
     num_workers=opt.n_cpu,
     collate_fn=floorplan_collate_fn,
@@ -330,7 +348,12 @@ for epoch in range(opt.n_epochs):
                     generator.state_dict(),
                     "./checkpoints/{}_{}.pth".format(exp_folder, batches_done),
                 )
-                wandb.save("/scratch/aledbetter/checkpoints/{}_{}.pth".format(exp_folder, batches_done))
+                wandb.save("./checkpoints/gen_{}_{}.pth".format(exp_folder, batches_done))
+                torch.save(
+                    discriminator.state_dict(),
+                    "./checkpoints/disc_{}_{}.pth".format(exp_folder, batches_done),
+                )
+                wandb.save("./checkpoints/disc_{}_{}.pth".format(exp_folder, batches_done))
                 visualizeSingleBatch(generator, fp_loader_test, opt, exp_folder, batches_done)
             if batches_done % opt.status_print_interval == 0:
                 print(
@@ -345,6 +368,7 @@ for epoch in range(opt.n_epochs):
                         err.item(),
                     )
                 )
+
             wandb.log({
             'epoch': epoch,
             'batch': batches_done,
@@ -352,12 +376,10 @@ for epoch in range(opt.n_epochs):
             'G_loss': g_loss.item(),
             'L1_loss': err.item()
             })
+
             batches_done += opt.n_critic
 
 wandb.finish()
-
-
-
 
 """def reader(filename):
     with open(filename) as f:
