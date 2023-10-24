@@ -35,10 +35,19 @@ def create_graph_from_user_input(user_input_path=None, model_path=None):
         room_types=dgmg_opts["room_types"],
         edge_types=dgmg_opts["edge_types"],
         gen_houses_dataset_only=False,
-        user_input_path=user_input_path,
+        user_input_path="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/DGMG_init.json",
     )
     model.load_state_dict(torch.load(model_path))
     model.eval()
+    
+    # update model's user-input path...
+    model.user_input_path = user_input_path
+    # Update model's cond vector
+    model.conditioning_vector_module.update_conditioning_vector(
+        user_input_path)
+    model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
+    # update cond vector inside the add-node agent
+    model.add_node_agent.conditioning_vector = model.conditioning_vector
 
     pipeline_graph = evaluator.generate_single_valid_graph(model=model)
     t2 = time.time()

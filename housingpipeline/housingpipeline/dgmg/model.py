@@ -705,15 +705,19 @@ class apply_partial_graph_input_completion(nn.Module):
                         num_eids, edge_feature_size, dtype=torch.int32
                     )
 
-        graph_data = {}
-        for canonical_edge_type in self.canonical_edge_types:
-            nids = (torch.tensor([0]), torch.tensor([0]))
-            graph_data[canonical_edge_type] = nids
+        if not os.path.isfile("./empty_house_graph/empty_house_graph.bin"):
+            graph_data = {}
+            for canonical_edge_type in self.canonical_edge_types:
+                nids = (torch.tensor([0]), torch.tensor([0]))
+                graph_data[canonical_edge_type] = nids
 
-        g = dgl.heterograph(graph_data)
-        add_dummy_features(g)
-        empty_out_graph(g)
-        return g
+            g = dgl.heterograph(graph_data)
+            add_dummy_features(g)
+            empty_out_graph(g)
+            dgl.save_graphs("./empty_house_graph/empty_house_graph.bin", g)
+            return g
+        else:
+            return dgl.load_graphs("./empty_house_graph/empty_house_graph.bin")[0][0]
 
     def finish_off_partial_graph(self):
         pass
@@ -1147,8 +1151,13 @@ class DGMG(nn.Module):
             return self.forward_inference()
 
         else:
+            # because "copying" the graph is too hard, save a copy to disk and load a new one when needed.
+            dgl.save_graphs("./tmp/partial_graph.bin", self.g)
             # make copy so that we can set back the partial graph
-            partial_copy = copy.copy(self.g)
+
+            # partial_copy : dgl.DGLGraph = dgl.edge_type_subgraph(self.g, self.g.canonical_etypes)
+            # partial_copy : dgl.DGLGraph = copy.deepcopy(self.g)
+
 
             # Set default to false
             complete_ok = False
@@ -1184,7 +1193,7 @@ class DGMG(nn.Module):
                 if response == 'continue':
                     complete_ok = True
                 elif response == 'regenerate':
-                    self.g = copy.copy(partial_copy)
+                    self.g : dgl.DGLGraph = dgl.load_graphs("./empty_house_graph/empty_house_graph.bin")[0][0]
                 elif response == 'stop':
                     print("Exiting the program.")
                     exit()
