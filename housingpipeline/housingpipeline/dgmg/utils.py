@@ -270,3 +270,180 @@ def tensor_to_one_hot(tensor, num_classes):
 
     # Expand dims to keep indexing the same as for the original tensor
     return one_hot[None,:]
+
+
+def one_hot_embedding(labels, num_classes=11):
+    """Embedding labels to one-hot form.
+
+    Args:
+      labels: (LongTensor) class labels, sized [N,].
+      num_classes: (int) number of classes.
+
+    Returns:
+      (tensor) encoded labels, sized [N, #classes].
+    """
+    y = torch.eye(num_classes)
+    # print(" label is",labels)
+    return y[labels.int()]
+
+
+def dgl_to_graphlist(g):
+    ''' Converts dgl graph to listgraph format, outputs [nodes, edges, edge features] '''
+
+    nodes_dict = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
+    connection_dict = {"corner_edge": 0, "room_adjacency_edge": 1}
+
+    nds = []
+    eds = []
+    eds_f = []
+
+    ew_features = g.nodes['exterior_wall'].data['hf'] # Gives edge features (list of 2 entries per edge)
+
+    ids_nodes = []
+
+    for key in g.ndata.get('a').keys():
+        keyamount = len(g.ndata.get('a').get(key))
+        while keyamount > 0:
+            ids_nodes.append(key)
+            keyamount += -1
+
+    ids_node_types = []
+
+    for item in ids_nodes:
+        ids_node_types.append(int(nodes_dict.get(item)))
+    ids_node_types = torch.Tensor(ids_node_types)
+
+    '''
+    Create node feature tensor
+    '''
+    # create empty node feature tensor
+    nds_f = torch.full((ids_node_types.shape[0],2), fill_value = -1.0)
+    # find nodetype id of EW's
+    ew_type_id = nodes_dict.get('exterior_wall')
+    # find node ids of EW's
+    ew_ids = torch.argwhere(ids_node_types == ew_type_id).flatten()
+    # insert ew nd features
+    nds_f[ew_ids] = ew_features
+    '''
+    Create one-hot'd node type tensor
+    '''
+    nds_t = one_hot_embedding(labels=ids_node_types, num_classes=len(g.ntypes))
+
+    '''
+    Create final nds list
+    '''
+    nds = torch.concatenate([nds_t, nds_f], dim=1)
+
+    '''
+    Create initial edge tensor with all edges (from_id, -1, to_id)
+    '''
+
+    # Create eds list of all connections with -1 (no edge)
+    # and create empty/default eds_f list with in and out node id entries will be omitted later, but for used for filling the list)
+    eds = []
+    for i, node_i in enumerate(ids_node_types):
+        for j, node_j in enumerate(ids_node_types):
+            if i != j:
+                eds.append([i, -1, j])
+
+    # Create empty (or default) eds_f list
+    eds_f = [[0,0,0] for i in range(len(eds))]
+
+    # Create list that shows what the id of the first node is for each node type
+    first_id_of_room_type = [0 for i in range(11)]
+    for room_type in range(11):
+        room_exists = 0
+        for i, nodevector in enumerate(nds):
+            if nodevector[room_type] == 1:
+                first_id_of_room_type[room_type] = i
+                room_exists = 1
+            if room_exists == 1:
+                break
+
+    '''
+    Fill the eds and eds_f lists
+    '''
+
+    for etype in g.canonical_etypes:
+        from_node, connection_type, to_node = etype
+        from_node = nodes_dict.get(from_node)
+        connection_type = connection_dict.get(connection_type)
+        to_node = nodes_dict.get(to_node)
+
+        from_ids, to_ids = g.edges(etype = etype)
+        
+        if len(from_ids) != 0:
+            for i,j in enumerate(from_ids):
+                from_id = first_id_of_room_type[from_node] + from_ids[i]
+                to_id = first_id_of_room_type[to_node] + to_ids[i]
+                edge_feature1 = g.edata.get('e').get(etype)[i][0].item()
+                edge_feature2 = g.edata.get('e').get(etype)[i][1].item()
+
+                # Add edge and edge features
+                for ed_number,ed in enumerate(eds):
+                    if from_id == ed[0] and to_id == ed[2]:
+                        eds[ed_number][1] = 1
+                        eds_f[ed_number][0] = connection_type
+                        eds_f[ed_number][1] = edge_feature1
+                        eds_f[ed_number][2] = edge_feature2
+
+
+
+    return [nds, eds, eds_f]
+
+
+def graph_direction_distribution(graphlist):
+    ''' Calculates the distributions for the number of wind directions checked per room.
+    Takes graphlist and returns list with 5 entries for the percentage of 0,1,2,3,4 directions checked. '''
+
+    num_directions_per_room = []
+    for i, room in enumerate(graphlist[0]): # Check each room
+        room_direction_list = []
+        num_directions = 0
+        North = 0
+        East = 0
+        South = 0
+        West = 0
+
+        if room[0] == 0.: # Not EW
+            for j,edge in enumerate(graphlist[1]): # Check each edge
+                if edge[1] == 1: # If edge exists
+                    if edge[0] == i: # If edge is from given room
+                        room_direction_list.append(graphlist[2][j][2])
+            
+            for direction in room_direction_list:
+                if direction in {7,0,1}: # direction is SE, E, NE
+                    East = 1
+                if direction in {1,2,3}: # direction is NE, N, NW
+                    North = 1
+                if direction in {3,4,5}: # direction is NW, W, SW
+                    West = 1
+                if direction in {5,6,7}: # direction is SW, S, SE
+                    South = 1
+            num_directions = East + North + West + South
+            num_directions_per_room.append(num_directions)
+
+    room_distribution = []
+    for i in range(5):
+        room_distribution.append(num_directions_per_room.count(i) / len(num_directions_per_room))
+
+    return room_distribution
+
+def room_without_doors(graphlist):
+    ''' Input graphlist, returns True/False whether there is a room with no doors '''
+
+    room_without_door_counter = 0
+    for i, room in enumerate(graphlist[0]): # Check each room
+        room_has_door = False
+        if room[0] == 0.:
+            for edg in graphlist[1]:
+                if edg[0] == i: # If edge is from room
+                    if graphlist[2][i][1] == 0: # If edge has door
+                        room_has_door = True
+                    if graphlist[0][edg[2]][0] == 0.: # To node is exterior wall
+                        if graphlist[0][edg[2]][12] == 1:
+                            room_has_door = True
+            if not room_has_door:
+                room_without_door_counter += 1
+
+    return room_without_door_counter > 0
