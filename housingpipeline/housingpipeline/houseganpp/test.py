@@ -81,12 +81,13 @@ def main():
         # draw real graph and groundtruth
         mks, nds, eds, eds_f, _, _ = sample
         masks = Variable(mks.type(Tensor))
-        # graph_sample = [mks, nds, eds, eds_f]
-        # import pickle
-        # import time
-        # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "wb") as file:
-        #     pickle.dump(graph_sample, file)
-        # time.sleep(20)
+        graph_sample = [mks, nds, eds, eds_f]
+        import pickle
+        import time
+        with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "wb") as file:
+            pickle.dump(graph_sample, file)
+        print("done")
+        time.sleep(20)
         real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] # Add the [:,:-2] to cut off the node features and leave the node types
         graph = [nds, eds, eds_f]
         true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])

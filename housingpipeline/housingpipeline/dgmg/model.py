@@ -1122,10 +1122,10 @@ class DGMG(nn.Module):
             while not complete_ok:
 
                 found_one = False
-                while not found_one:
+                if not found_one:
                     self.forward()
-                    found_one = check_house(self, quiet=True)
-                    if not found_one: print("Haise didn't pass tests, regenerating.")
+                    found_one = check_house(self, quiet=False)
+                    if not found_one: print("House didn't pass tests, regenerating.")
                 show_graph(self.g, self.user_input_path)
 
                 # Ask the user if the plot is correct
@@ -1146,8 +1146,8 @@ class DGMG(nn.Module):
                 # Close plot
                 plt.close()
 
-                # Return graph
-                return self.g
+            # Return graph
+            return self.g
 
     def forward(self, init_actions=None, actions=None):
         # The graph we will work on

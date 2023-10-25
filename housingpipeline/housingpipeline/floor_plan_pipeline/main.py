@@ -20,10 +20,17 @@ def main(args):
 
     g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
     # dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
-    graph_list = dgl_to_graphlist(g)
+    graph_lista = dgl_to_graphlist(g=g, user_input_path=args["input_path"])
     # print(g)
     with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
-        sample_graph_list = pickle.load(file)
+        graph_listb = pickle.load(file)
+
+    # graph_list = []
+    # mks, nds, eds, eds_f = graph_listb
+    # graph_list.append(mks)
+    # mks, nds, eds, eds_f = graph_lista
+    # graph_list += [nds, eds, eds_f]
+    graph_list = graph_listb
 
     # Make a copy of the graph list
     floorplan_ok = False
@@ -74,7 +81,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="./pretrained_models/dgmg_model_epoch_1_batch_2520.pth",
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/checkpoints/dgmg_model_epoch_0_batch_340.pth",
         help="full path to pretained dgmg model",
     )
 

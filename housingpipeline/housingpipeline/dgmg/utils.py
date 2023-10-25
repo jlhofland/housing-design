@@ -5,6 +5,7 @@ import dgl
 import numpy as np
 import math
 from pprint import pprint
+import json
 
 import matplotlib.pyplot as plt
 import torch
@@ -287,7 +288,60 @@ def one_hot_embedding(labels, num_classes=11):
     return y[labels.to(dtype=torch.long)]
 
 
-def dgl_to_graphlist(g):
+def get_bbs_from_user_input(user_input_path, nodes):
+    
+    def give_edge_width_1(edge):
+        ''' Gives the bounding box of an edge width 1 '''
+        x0, y0, x1, y1 = edge
+        if x0 == x1:
+            x1 = x1 + 1
+        if y0 == y1:
+            y1 = y1 + 1
+        return [x0, y0, x1, y1]
+
+    with open(user_input_path, "r") as file:
+        data : dict = json.load(file)
+
+    bbs = np.zeros((nodes.shape[0], 4))
+
+    # Find Exterior Walls and add to nodes (with features length and door) and bounding boxes list
+    exterior_walls = data["exterior_walls"]
+    ex_wall_bbs = []
+    for wall in exterior_walls:
+        ex_wall_bbs.append(wall[1:-1]) # Edges have width 0 now still
+    ex_wall_bbs = np.array(ex_wall_bbs) # Bounding boxes of Exterior Walls values scaled between 0 and 1
+
+    # hope the order is right (TODO)
+    ew_ids = [i for i, nd in enumerate(nodes) if nd[0]==1]
+
+    for i, id in enumerate(ew_ids):
+        bbs[id] = ex_wall_bbs[i]
+
+    # Give edges width 1 (1/256 actually) here  for each item in bbs list (leaves bounding boxes with width != 0 alone)
+    for i, bb in enumerate(bbs):
+        if np.all(bb==0):
+            continue
+        bbs[i] = give_edge_width_1(bbs[i])
+    
+    bbs = bbs / 256.0
+
+    return bbs
+
+def convert_bbs_to_masks(bbs):
+    im_size = 64
+    rooms_mks = np.zeros((bbs.shape[0], im_size, im_size))
+    for k, bb in enumerate(bbs):
+        if np.all(bb==0):
+            continue
+        x0, y0, x1, y1 = im_size * bb
+        x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
+        rooms_mks[k, x0 : x1 + 1, y0 : y1 + 1] = 1.0
+
+    rooms_mks = torch.FloatTensor(rooms_mks)
+    return rooms_mks
+
+
+def dgl_to_graphlist(g, user_input_path=None):
     ''' Converts dgl graph to listgraph format, outputs [nodes, edges, edge features] '''
 
     nodes_dict = {"exterior_wall": 0, "living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "missing": 5, "closet": 6, "balcony": 7, "corridor": 8, "dining_room": 9, "laundry_room": 10}
@@ -387,9 +441,14 @@ def dgl_to_graphlist(g):
                         eds_f[ed_number][1] = edge_feature1
                         eds_f[ed_number][2] = edge_feature2
 
+    if user_input_path is not None:
+        bbs = get_bbs_from_user_input(user_input_path=user_input_path, nodes=nds)
 
+        masks = convert_bbs_to_masks(bbs)
 
-    return [nds, eds, eds_f]
+        return [masks, nds, eds, eds_f]
+    else:
+        return [nds, eds, eds_f]
 
 
 def graph_direction_distribution(graphlist):

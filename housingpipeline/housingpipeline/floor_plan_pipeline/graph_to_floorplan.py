@@ -48,11 +48,16 @@ def create_floorplan_from_graph(graph, model_path, output_path):
 
     # draw real graph and groundtruth
     mks, nds, eds, eds_f = graph
+    (nds, eds, eds_f) = (
+        torch.tensor(nds),
+        torch.tensor(eds),
+        torch.tensor(eds_f)
+    )
     masks = Variable(mks.type(Tensor))
     real_nodes = np.where(nds[:,:-2].detach().cpu()==1)[-1] 
     graph = [nds, eds, eds_f]
-    true_graph_obj, graph_im = draw_graph([real_nodes, eds.detach().cpu().numpy()])
-    graph_im.save('./{}/final_pipeline_graph.png'.format(output_path)) # save graph
+    true_graph_obj, graph_im = draw_graph([real_nodes, eds.numpy()])
+    graph_im.save('./{}/final_pipeline_graph2.png'.format(output_path)) # save graph
     
     # add room types incrementally
     _types = sorted(list(set(real_nodes))) 

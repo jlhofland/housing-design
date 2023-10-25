@@ -40,7 +40,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         eval_data_loader = DataLoader(
             eval_dataset,
             batch_size=1,
-            shuffle=False,
+            shuffle=True,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
@@ -132,7 +132,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                                 epoch + 1, loss_averaged.item(), prob_averaged.item()
                             )
 
-                        if rank == 0 and i%(opts["batch_size"]/2) == 0:
+                        if rank == 0 and i%opts["batch_size"] == 0:
                             print(
                                 f"PID {rank}: Finished training on house {(i)} with batch size: {opts['batch_size']}"
                             )
@@ -348,17 +348,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_reduced.p",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
@@ -400,7 +400,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval_int",
         type=int,
-        default="10",
+        default="200",
         help="number of training houses before eval houses",
     )
 
@@ -432,7 +432,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=20,  # ALEX 10
+        default=10,  # ALEX 10
         help="batch size to use for training",
     )
     parser.add_argument(
