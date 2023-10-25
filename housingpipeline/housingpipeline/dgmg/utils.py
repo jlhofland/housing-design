@@ -484,7 +484,7 @@ def graph_direction_distribution(graphlist):
 
     room_distribution = []
     for i in range(5):
-        room_distribution.append(num_directions_per_room.count(i) / len(num_directions_per_room))
+        room_distribution.append(num_directions_per_room.count(i) / (len(num_directions_per_room)) + 1e-8)
 
     return room_distribution
 
