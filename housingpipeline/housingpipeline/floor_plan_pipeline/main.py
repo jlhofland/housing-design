@@ -106,7 +106,8 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--hhgpp-path",
-        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/gen_exp_D_300000.pth",
+        # 123000 is best so far
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/gen_exp_D_283000.pth",
         help="full path to pretrained hhgpp model",
     )
 

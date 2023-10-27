@@ -317,7 +317,7 @@ def get_bbs_from_user_input(user_input_path, nodes):
     for i, id in enumerate(ew_ids):
         bbs[id] = ex_wall_bbs[i]
 
-    # Give edges width 1 (1/256 actually) here  for each item in bbs list (leaves bounding boxes with width != 0 alone)
+    # Give edges width 1 (1/256 actually) here for each item in bbs list (leaves bounding boxes with width != 0 alone)
     for i, bb in enumerate(bbs):
         if np.all(bb==0):
             continue
@@ -449,6 +449,21 @@ def dgl_to_graphlist(g, user_input_path=None):
         return [masks, nds, torch.tensor(eds), torch.tensor(eds_f)]
     else:
         return [nds, torch.tensor(eds), torch.tensor(eds_f)]
+
+def lists_to_tuple(input_list):
+    level_data = []
+    for a in input_list:
+        if isinstance(a, list):
+            level_data.append(lists_to_tuple(a))
+        else:
+            level_data.append(a)
+    return tuple(level_data)
+
+def graphlist_to_tuple(graph_list):
+    if not type(graph_list) is list:
+        graph_list = graph_list.tolist()
+    return lists_to_tuple(graph_list)
+
 
 
 def graph_direction_distribution(graphlist):

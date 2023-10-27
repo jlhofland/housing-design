@@ -68,11 +68,11 @@ for x, y in ROOM_CLASS.items():
     CLASS_ROM[y] = x
 ID_COLOR = {
     0: "#D3A2C7",
-    1: "#EE4D4D",
-    2: "#C67C7B",
+    1: "#EE4D4D", # exterior wall, red
+    2: "#C67C7B", # kitchen, pale red
     3: "#FFD274",
-    4: "#BEBEBE",
-    5: "#BFE3E8",
+    4: "#BEBEBE", # bedroom, grey
+    5: "#BFE3E8", # bathroom, cyan
     6: "#7BA779",
     7: "#E87A90",
     8: "#FF8C69",

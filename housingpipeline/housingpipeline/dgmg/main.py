@@ -300,8 +300,9 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         # clear eval folder
         if os.path.isdir(f"./eval_graphs/"):
                 shutil.rmtree(f"./eval_graphs/")
-        for i, user_input_path in enumerate(dataloader):
-            if i == 5: break
+        # for i, user_input_path in enumerate(dataloader):
+        for i, user_input_path in ["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json"]:
+            if i == 1: break
             print(f"Evaluation {i}")
             lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
             # update model's user-input path

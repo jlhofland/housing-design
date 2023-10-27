@@ -6,8 +6,9 @@ import time
 import torch
 import json
 import wandb
+import numpy as np
 from collections import OrderedDict
-from housingpipeline.dgmg.utils import dgl_to_graphlist, graph_direction_distribution, room_without_doors
+from housingpipeline.dgmg.utils import dgl_to_graphlist, graph_direction_distribution, room_without_doors, graphlist_to_tuple
 
 
 import matplotlib.pyplot as plt
@@ -19,6 +20,13 @@ lifull_data_distribution = [0, 3.3926383920000003e-04, 5.467806213999999e-03, 6.
 def check_house(model, quiet=False):
     g = model.g
     issues = set()
+    # results: 
+    # First the user input constraints are all fully met. 
+    # Second, all rooms must have at least one door. 
+    # Third, all exterior walls must connect to at least two other walls and one room. 
+    # Fourth, room must connect to another room and a wall, at minimum. 
+    # Fifth, each room must have outgoing connections that together cover all directions.
+    results = np.zeros((1,5))
     # Assert that each exterior wall is connected to at least one other room besides its single outgoing connecting wall edge
     print("\nHouse complete, checking")
     for src in range(g.num_nodes("exterior_wall")):
@@ -50,6 +58,7 @@ def check_house(model, quiet=False):
         if not total_out_degrees > 2:
             # Each "exterior_Wall" node should have connections to at least one other room-type  
             issues.add("One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room")
+            results[2] = 1
             break
             # print(
             #     "One or more Exterior Walls do not connect to two other Exterior Walls and minimum one other room"
@@ -71,6 +80,7 @@ def check_house(model, quiet=False):
                     # print(f"Room Src ID: {src}, Out degree: {out_degrees}, ET: {cet}")
             if not total_out_degrees >= 2:
                 issues.add("One or more Rooms do not connect to minimum 2 other rooms")
+                results[3] = 1
                 break
                 # print("One or more Rooms do not connect to minimum 2 other rooms")
                 # return False
@@ -88,9 +98,11 @@ def check_house(model, quiet=False):
     for i, room in enumerate(rooms):
         if model.g.num_nodes(room) < ui_data[i][0]:
             issues.add("Too few " + room + "s")
+            results[0] = 1
             continue
         elif model.g.num_nodes(room) > ui_data[i][0] and ui_data[i][1] == False:
             issues.add("Too many " + room + "s")
+            results[0] = 1
             continue
 
     # Check edge features
@@ -126,22 +138,25 @@ def check_house(model, quiet=False):
     for i,percentage in enumerate(graph_distribution):
         if abs(percentage - lifull_data_distribution[i]) > 0.2 * lifull_data_distribution[i]:
             issues.add("Room direction distribution is too far of the lifull distribution")
+            results[4] = 1
     
     # # Checks whether every room in the house has a door (either to another room or connected to exterior wall with a door)
     if room_without_doors(graphlist):
         issues.add("One or more rooms have no doors")
+        results[1] = 1
+
 
     if not issues:
         if not quiet:
             print("House is valid.")
-        return True
+        return True, results
     else:
         if not quiet:
             print("House failed.")
             print("Issues with home:")
             for issue in issues:
                 print(issue)
-        return False
+        return False, results
 
 
 def generate_home_dataset(g, num_homes):
@@ -403,7 +418,7 @@ class HouseModelEvaluation(object):
         found_one = False
         while not found_one:
             sampled_graph = model.forward_pipeline(user_interface=True)
-            found_one = check_house(model)
+            found_one, _ = check_house(model)
         return sampled_graph
 
     
@@ -417,6 +432,7 @@ class HouseModelEvaluation(object):
             num_valid = 0
             plot_times = 0
             graphs_to_plot = []
+            total_results = np.zeros((1,5))
 
             options = {
                 "node_size": 300,
@@ -428,6 +444,7 @@ class HouseModelEvaluation(object):
 
             print(f"Evaluation saving to {self.dir}")
 
+            hashed_graphs = []
             for i in range(num_samples):
                 sampled_graph = model()
                 if isinstance(sampled_graph, list):
@@ -439,6 +456,12 @@ class HouseModelEvaluation(object):
                     sampled_graph = sampled_graph[0]
 
                 graphs_to_plot.append(sampled_graph)
+
+                graph_list = dgl_to_graphlist(sampled_graph)
+                graph_tuple = graphlist_to_tuple(graph_list)
+                graph_hash = hash(graph_tuple)
+                if graph_hash not in hashed_graphs:
+                    hashed_graphs.append(graph_hash)
 
                 if epoch is None:
                     dgl.save_graphs(f"./eval_graphs/{lifull_num}/dgmg_eval_{eval_it}_graph_{i}.bin", [sampled_graph])
@@ -457,7 +480,8 @@ class HouseModelEvaluation(object):
 
                 graph_size = sampled_graph.num_nodes()
                 valid_size = self.v_min <= graph_size <= self.v_max
-                house = check_house(model)
+                house, results = check_house(model)
+                total_results += results
 
                 num_total_size += graph_size
 
@@ -472,6 +496,7 @@ class HouseModelEvaluation(object):
 
                 if valid_size and house:
                     num_valid += 1
+
 
             if len(graphs_to_plot) >= 1:
                 plot_times += 1
@@ -505,6 +530,8 @@ class HouseModelEvaluation(object):
             self.valid_size_ratio = num_valid_size / num_samples
             self.house_ratio = num_house / num_samples
             self.valid_ratio = num_valid / num_samples
+            self.total_results = total_results / num_samples
+            self.novel_ratio = len(hashed_graphs) / num_samples
         except Exception as e:
             print(f"Rollout error... {e}")
 
@@ -525,6 +552,8 @@ class HouseModelEvaluation(object):
             "valid_size_ratio": self.valid_size_ratio,
             "house_ratio": self.house_ratio,
             "valid_ratio": self.valid_ratio,
+            "total_results": self.total_results,
+            "novel_ratio": self.novel_ratio
         }
 
         try:

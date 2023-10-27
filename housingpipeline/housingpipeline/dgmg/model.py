@@ -1124,7 +1124,7 @@ class DGMG(nn.Module):
                 found_one = False
                 if not found_one:
                     self.forward()
-                    found_one = check_house(self, quiet=False)
+                    found_one, _ = check_house(self, quiet=False)
                     if not found_one: print("House didn't pass tests, regenerating.")
                 show_graph(self.g, self.user_input_path)
 
