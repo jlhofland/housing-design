@@ -1,0 +1,6 @@
+how would the client and architect's process change
+	architect discusses with client (how many beds)
+	
+document more user-constraints (windows need so much wall space)
+document why we chose models and datasets, and designate generalizability
+include post-processing steps (architect would add windowsadd windows)

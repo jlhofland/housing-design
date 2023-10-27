@@ -100,5 +100,6 @@ def show_graph(g, user_input_path):
     # Draw the graph
     nx.draw(ng, pos=pos, node_color=colors, labels=labels, font_size=7)
     plt.show(block=False)
+    plt.savefig(fname="./pipeline_output/dgl_graph.png")
 
 # print("End of the program.")

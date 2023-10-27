@@ -1,7 +1,7 @@
 {
-  "number_of_living_rooms":0,
+  "number_of_living_rooms":10,
   "living_rooms_plus?":false,
-  "number_of_bedrooms":2,
+  "number_of_bedrooms":4,
   "bedrooms_plus?":false,
   "number_of_bathrooms":1,
   "bathrooms_plus?":true,

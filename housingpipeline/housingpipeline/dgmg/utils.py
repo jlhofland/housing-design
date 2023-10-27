@@ -329,7 +329,7 @@ def get_bbs_from_user_input(user_input_path, nodes):
 
 def convert_bbs_to_masks(bbs):
     im_size = 64
-    rooms_mks = np.zeros((bbs.shape[0], im_size, im_size))
+    rooms_mks = np.full((bbs.shape[0], im_size, im_size), fill_value=-1)
     for k, bb in enumerate(bbs):
         if np.all(bb==0):
             continue
@@ -446,9 +446,9 @@ def dgl_to_graphlist(g, user_input_path=None):
 
         masks = convert_bbs_to_masks(bbs)
 
-        return [masks, nds, eds, eds_f]
+        return [masks, nds, torch.tensor(eds), torch.tensor(eds_f)]
     else:
-        return [nds, eds, eds_f]
+        return [nds, torch.tensor(eds), torch.tensor(eds_f)]
 
 
 def graph_direction_distribution(graphlist):
