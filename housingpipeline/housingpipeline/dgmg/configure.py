@@ -22,7 +22,7 @@ synthetic_dataset_configure = {
     "optimizer": "Adam",
     "nepochs": 100, #25
     "ds_size": 100,#0,
-    "num_generated_samples": 4,#00,
+    "num_generated_samples": 3,#00,
 }
 
 

@@ -301,7 +301,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         if os.path.isdir(f"./eval_graphs/"):
                 shutil.rmtree(f"./eval_graphs/")
         # for i, user_input_path in enumerate(dataloader):
-        for i, user_input_path in ["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/input.json"]:
+        for i, user_input_path in enumerate(["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/input.json"]):
             if i == 1: break
             print(f"Evaluation {i}")
             lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
@@ -319,7 +319,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
             shutil.copy(user_input_path, f"./eval_graphs/{lifull_num}/")
             evaluator.rollout_and_examine(
                 model, opts["num_generated_samples"], eval_it=i, run=run, lifull_num=lifull_num)
-            evaluator.write_summary(eval_it=i, run=run, cli_only=True, lifull_num=lifull_num)
+            evaluator.write_summary(eval_it=i, run=run, cli_only=False, lifull_num=lifull_num)
         t2 = time.time()
         del model.g
         print(

@@ -479,11 +479,13 @@ def graph_direction_distribution(graphlist):
         South = 0
         West = 0
 
+        num_outgoing_edges = 0
         if room[0] == 0.: # Not EW
             for j,edge in enumerate(graphlist[1]): # Check each edge
                 if edge[1] == 1: # If edge exists
                     if edge[0] == i: # If edge is from given room
-                        room_direction_list.append(graphlist[2][j][2])
+                        room_direction_list.append(int(graphlist[2][j][2].item()))
+                        num_outgoing_edges += 1
             
             for direction in room_direction_list:
                 if direction in {7,0,1}: # direction is SE, E, NE

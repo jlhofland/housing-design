@@ -26,7 +26,7 @@ def check_house(model, quiet=False):
     # Third, all exterior walls must connect to at least two other walls and one room. 
     # Fourth, room must connect to another room and a wall, at minimum. 
     # Fifth, each room must have outgoing connections that together cover all directions.
-    results = np.zeros((1,5))
+    results = np.zeros(5)
     # Assert that each exterior wall is connected to at least one other room besides its single outgoing connecting wall edge
     print("\nHouse complete, checking")
     for src in range(g.num_nodes("exterior_wall")):
@@ -137,7 +137,7 @@ def check_house(model, quiet=False):
     
     for i,percentage in enumerate(graph_distribution):
         if abs(percentage - lifull_data_distribution[i]) > 0.2 * lifull_data_distribution[i]:
-            issues.add("Room direction distribution is too far of the lifull distribution")
+            issues.add("Room direction distribution is too far off the lifull distribution")
             results[4] = 1
     
     # # Checks whether every room in the house has a door (either to another room or connected to exterior wall with a door)
