@@ -153,6 +153,7 @@ class GraphEmbed(nn.Module):
 
         # Setting from the paper
         self.graph_hidden_size = 4 * node_hidden_size
+        self.node_hidden_size = node_hidden_size
 
         # Embed graphs
         self.node_gating = nn.Sequential(
@@ -168,7 +169,7 @@ class GraphEmbed(nn.Module):
             # OLD:
             # hvs = g.ndata["hv"]
             # NEW:
-            hvs = torch.empty((0, 16))
+            hvs = torch.empty((0, self.node_hidden_size))
             for key in g.ndata["hv"]:
                 hvs = torch.cat((hvs, g.ndata["hv"][key]), dim=0)
             return (self.node_gating(hvs) * self.node_to_graph(hvs)).sum(
@@ -233,14 +234,14 @@ class GraphProp(nn.Module):
         # Note that "node rep for node u is still accessed via "hv" from edgeu2v's src node.."
         # #ALEX
         # print(edges.src.keys())
-        if edges.canonical_etype == 'corner_edge':
+        if edges.canonical_etype[1] == 'corner_edge':
             edata = torch.cat([
                 torch.zeros((edges.data['e'].shape[0], 1)),
                 edges.data["e"]
             ],
                 dim=1
             )
-        elif edges.canonical_etype == 'room_adjacency_edge':
+        elif edges.canonical_etype[1] == 'room_adjacency_edge':
             edata = torch.cat([
                 torch.ones((edges.data['e'].shape[0], 1)),
                 edges.data["e"]
@@ -453,7 +454,7 @@ class PredictFeatures(nn.Module):
             [
                 FeatPredict(
                     graph_embed_hidden_size + 2 * node_hidden_size,
-                    16,
+                    int((graph_embed_hidden_size + 2 * node_hidden_size)/2),
                     num_edge_feature_classes,
                 )
                 for num_edge_feature_classes in num_edge_feature_classes_list
@@ -482,6 +483,7 @@ class ChooseDestAndUpdate(nn.Module):
 
         self.graph_op = {"embed": graph_embed_func, "prop": graph_prop_func}
         self.choose_dest = nn.Linear(2 * node_hidden_size, 1)
+        self.node_hidden_size = node_hidden_size
 
         self.feature_loss = nn.CrossEntropyLoss()
 
@@ -529,7 +531,7 @@ class ChooseDestAndUpdate(nn.Module):
         src_embed_expand = (
             g.nodes[src_type].data["hv"][src_id].expand(g.num_nodes() - 1, -1)
         )
-        possible_dests_embed = torch.empty((0, 16))
+        possible_dests_embed = torch.empty((0, self.node_hidden_size))
         # Create mapping from chosen "dest_id" back to real dest id/type
         mapping = [[], []]
         reference_list = []  # to determine corresponding index for ground truth
@@ -680,7 +682,7 @@ class apply_partial_graph_input_completion(nn.Module):
         self.room_types = room_types
         self.canonical_edge_types = canonical_edge_types
         self.gen_houses_dataset_only = gen_houses_dataset_only
-        self.g = None
+        self.g : dgl.DGLHeteroGraph = None
 
     def define_empty_typed_graph(self, ntypes, canonical_edge_types, edge_feature_size):
         def remove_all_edges(g):
