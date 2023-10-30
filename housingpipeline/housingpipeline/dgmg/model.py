@@ -152,7 +152,7 @@ class GraphEmbed(nn.Module):
         super(GraphEmbed, self).__init__()
 
         # Setting from the paper
-        self.graph_hidden_size = 2 * node_hidden_size
+        self.graph_hidden_size = 4 * node_hidden_size
 
         # Embed graphs
         self.node_gating = nn.Sequential(
@@ -195,7 +195,7 @@ class GraphProp(nn.Module):
             # input being [hv, hu, xuv]
             message_funcs.append(
                 nn.Linear(
-                    2 * node_hidden_size + edge_features_size,
+                    2 * node_hidden_size + 1 + edge_features_size,
                     self.node_activation_hidden_size,
                 )
             )
@@ -233,7 +233,21 @@ class GraphProp(nn.Module):
         # Note that "node rep for node u is still accessed via "hv" from edgeu2v's src node.."
         # #ALEX
         # print(edges.src.keys())
-        return {"m": torch.cat([edges.src["hv"], edges.data["e"]], dim=1)}
+        if edges.canonical_etype == 'corner_edge':
+            edata = torch.cat([
+                torch.zeros((edges.data['e'].shape[0], 1)),
+                edges.data["e"]
+            ],
+                dim=1
+            )
+        elif edges.canonical_etype == 'room_adjacency_edge':
+            edata = torch.cat([
+                torch.ones((edges.data['e'].shape[0], 1)),
+                edges.data["e"]
+            ],
+                dim=1
+            )
+        return {"m": torch.cat([edges.src["hv"], edata], dim=1)}
 
     def dgmg_reduce(self, nodes, round):
         hv_old = nodes.data["hv"]
@@ -492,7 +506,8 @@ class ChooseDestAndUpdate(nn.Module):
         # true_classes: (num_edge_features) true feature classes
 
         # loss1 = self.feature_loss(feature_logits, true_classes)
-        loss = F.log_softmax(feature_logits, dim=1)[np.arange(true_classes.shape[0]), true_classes].sum()
+        loss = F.log_softmax(feature_logits, dim=1)[np.arange(
+            true_classes.shape[0]), true_classes].sum()
 
         return loss
 
@@ -1084,70 +1099,71 @@ class DGMG(nn.Module):
         return self.g
 
     def forward_pipeline(self, user_interface=True):
-            # The graph we will work on
-            self.g = self.partial_graph_agent(self.user_input_path)
+        # The graph we will work on
+        self.g = self.partial_graph_agent(self.user_input_path)
 
-            # Add a list of canonical_etypes for use by Graph prop...
-            self.graph_prop.canonical_etypes = [
-                cet for cet in self.g.canonical_etypes]
+        # Add a list of canonical_etypes for use by Graph prop...
+        self.graph_prop.canonical_etypes = [
+            cet for cet in self.g.canonical_etypes]
 
-            self.initialize_partial_graph_node_representations()
+        self.initialize_partial_graph_node_representations()
 
-            if user_interface:
-                # Set default to false
-                partial_ok = False
-
-                # Loop until user is satisfied with the graph or exits
-                while not partial_ok:
-                    show_graph(self.g, self.user_input_path)
-
-                    # Ask the user if the plot is correct
-                    response = input(
-                        "Does this graph represent your user input?: (yes/no)").strip().lower()
-                    if response == 'yes':
-                        partial_ok = True
-                    elif response == 'no':
-                        print("Exiting the program. Please make changes to user input.")
-                        exit()
-                    else:
-                        print("Invalid input. Please enter either 'yes' or 'no'.")
-
-            # save a copy to disk and load a new one when needed.
-            dgl.save_graphs("./tmp/partial_graph.bin", self.g)
-
+        if user_interface:
             # Set default to false
-            complete_ok = False
+            partial_ok = False
 
-            # Loop until user is satisfied with the graph
-            while not complete_ok:
-
-                found_one = False
-                if not found_one:
-                    self.forward()
-                    found_one, _ = check_house(self, quiet=False)
-                    if not found_one: print("House didn't pass tests, regenerating.")
+            # Loop until user is satisfied with the graph or exits
+            while not partial_ok:
                 show_graph(self.g, self.user_input_path)
 
                 # Ask the user if the plot is correct
                 response = input(
-                    "What would you like to do? (continue/regenerate/stop): ").strip().lower()
-                if response == 'continue':
-                    complete_ok = True
-                elif response == 'regenerate':
-                    print("You got it!")
-                    # self.g : dgl.DGLGraph = dgl.load_graphs("./tmp/partial_graph.bin")[0][0]
-                elif response == 'stop':
-                    print("Exiting the program.")
+                    "Does this graph represent your user input?: (yes/no)").strip().lower()
+                if response == 'yes':
+                    partial_ok = True
+                elif response == 'no':
+                    print("Exiting the program. Please make changes to user input.")
                     exit()
                 else:
-                    print(
-                        "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+                    print("Invalid input. Please enter either 'yes' or 'no'.")
 
-                # Close plot
-                plt.close()
+        # save a copy to disk and load a new one when needed.
+        dgl.save_graphs("./tmp/partial_graph.bin", self.g)
 
-            # Return graph
-            return self.g
+        # Set default to false
+        complete_ok = False
+
+        # Loop until user is satisfied with the graph
+        while not complete_ok:
+
+            found_one = False
+            if not found_one:
+                self.forward()
+                found_one, _ = check_house(self, quiet=False)
+                if not found_one:
+                    print("House didn't pass tests, regenerating.")
+            show_graph(self.g, self.user_input_path)
+
+            # Ask the user if the plot is correct
+            response = input(
+                "What would you like to do? (continue/regenerate/stop): ").strip().lower()
+            if response == 'continue':
+                complete_ok = True
+            elif response == 'regenerate':
+                print("You got it!")
+                # self.g : dgl.DGLGraph = dgl.load_graphs("./tmp/partial_graph.bin")[0][0]
+            elif response == 'stop':
+                print("Exiting the program.")
+                exit()
+            else:
+                print(
+                    "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+
+            # Close plot
+            plt.close()
+
+        # Return graph
+        return self.g
 
     def forward(self, init_actions=None, actions=None):
         # The graph we will work on
@@ -1164,14 +1180,17 @@ class DGMG(nn.Module):
 
         if self.training:
             self.prepare_for_train()
+            # also perform a graph propagation after partial graph init
+            self.graph_prop(self.g)
             self.finalize_partial_graph_train(init_actions)
             return self.forward_train(actions)
 
         else:
             # Finalize the partial graph
+            # also perform a graph propagation after partial graph init
+            self.graph_prop(self.g)
             self.finalize_partial_graph_inference()
             return self.forward_inference()
-
 
     def initialize_partial_graph_node_representations(self):
         for ntype in self.g.ntypes:

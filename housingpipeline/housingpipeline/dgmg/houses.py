@@ -155,7 +155,11 @@ def check_house(model, quiet=False):
             print("House failed.")
             print("Issues with home:")
             for issue in issues:
-                print(issue)
+                if issue == "Room direction distribution is too far off the lifull distribution":
+                    print(f"{issue}: {graph_distribution}")
+                else:
+                    print(issue)
+
         return False, results
 
 
@@ -549,10 +553,8 @@ class HouseModelEvaluation(object):
             "v_min": self.v_min,
             "v_max": self.v_max,
             "average_size": self.average_size,
-            "valid_size_ratio": self.valid_size_ratio,
-            "house_ratio": self.house_ratio,
             "valid_ratio": self.valid_ratio,
-            "total_results": self.total_results,
+            "validity_results": self.total_results,
             "novel_ratio": self.novel_ratio
         }
 

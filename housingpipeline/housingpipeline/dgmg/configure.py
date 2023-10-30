@@ -17,12 +17,12 @@ def dataset_based_configure(opts):
 
 
 synthetic_dataset_configure = {
-    "node_hidden_size": 16,
-    "num_propagation_rounds": 2,
+    "node_hidden_size": 32,
+    "num_propagation_rounds": 4,
     "optimizer": "Adam",
     "nepochs": 100, #25
     "ds_size": 100,#0,
-    "num_generated_samples": 3,#00,
+    "num_generated_samples": 5,#00,
 }
 
 
@@ -40,7 +40,6 @@ houses_configure = {
     **{
         "min_size": 3,
         "max_size": 30,
-        "lr": 5e-4,
         "node_features_size": 2,
         "num_edge_feature_classes_list": 2*[max(3,9)], # It is convenient if the two feature predictor networks predict for the same number of classes
         "room_types": ["exterior_wall", "living_room", "kitchen", "bedroom", "bathroom", "missing", "closet", "balcony", "corridor", "dining_room", "laundry_room"] ,

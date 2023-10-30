@@ -261,7 +261,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
     elif os.path.exists("./model.pth"):
         t1 = time.time()
         # Setup dataset and data loader
-        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
+        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final"
         test_dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
         dataloader = DataLoader(
             test_dataset,
