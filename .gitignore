@@ -23,3 +23,6 @@ housingpipeline/housingpipeline/floor_plan_pipeline/misc/dgmg_graph*
 housingpipeline/housingpipeline/floor_plan_pipeline/tmp/
 housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models
 housingpipeline/housingpipeline/dgmg/model.pth
+housingpipeline/housingpipeline/dgmg/example_graph_plots/
+housingpipeline/housingpipeline/dgmg/example_graphs/
+wandb/

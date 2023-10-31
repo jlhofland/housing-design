@@ -6,25 +6,35 @@ import numpy as np
 import torch
 import torch.nn as nn
 import sys
+from housingpipeline.dgmg.houses import check_house
 
-sys.path.append("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
+# sys.path.append("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg")
 
 
-model = torch.load("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/model.pth")
+# model = torch.load("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/model.pth")
 
-# Print model's state_dict
-print("Model's state_dict:")
-for param_tensor in model.state_dict():
-    print(param_tensor, "\t", model.state_dict()[param_tensor].size())
+# # Print model's state_dict
+# print("Model's state_dict:")
+# for param_tensor in model.state_dict():
+#     print(param_tensor, "\t", model.state_dict()[param_tensor].size())
 
-torch.save(model.state_dict(), "dgmg_state_dict.pth")
+# torch.save(model.state_dict(), "dgmg_state_dict.pth")
 
-from housingpipeline.dgmg.model import DGMG
+# from housingpipeline.dgmg.model import DGMG
 
-# model = DGMG()
-a=torch.load_state_dict("./dgmg_state_dict.pth")
+# # model = DGMG()
+# a=torch.load_state_dict("./dgmg_state_dict.pth")
 
-# g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/dgmg/results/2023-09-27_16-56-24/graphs/g0.bin")[0][0]
+# with os.scandir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs") as dir:
+#     for entry in dir:
+#         g = dgl.load_graphs("entry.path")[0][0]
+
+
+
+g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_0.bin")[0][0]
+
+for key in g.edata["e"]:
+    print(f"{key}: {g.edata['e'][key]}")
 
 # for cet in g.canonical_etypes:
 #     if(g.num_edges(cet)>0):

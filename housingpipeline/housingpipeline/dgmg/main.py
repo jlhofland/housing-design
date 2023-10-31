@@ -10,10 +10,11 @@ import time
 import os
 import wandb
 import shutil
+import dgl
 
 import torch
 import torch.multiprocessing as mp
-from housingpipeline.dgmg.houses import plot_eval_graphs
+from housingpipeline.dgmg.houses import plot_eval_graphs, check_house
 from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
@@ -33,7 +34,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         train_data_loader = DataLoader(
             train_dataset,
             batch_size=1,
-            shuffle=True,
+            shuffle=False,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
@@ -95,6 +96,8 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                     )
                 graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(train_data_loader):
+                    if i > 10:
+                        continue
                     if i%20  == 0:
                         print(f"PID {rank} - Beginning house {i}")
 
@@ -217,11 +220,19 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                         print(
                             f"PID: {rank} - House number {i+1} raised error {e} \nSkipping this house.")
 
-                    # graphs_to_plot.append(model.g)
-                    # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
+                    lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
+                    
+                    valid, results = check_house(model)
+                    print(f"House valid? {valid}. Results: {results}")
+                    graphs_to_plot.append(model.g)
+                    dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
+                    with open("./example_graphs/"+f"graph_{i}_house_nr_{lifull_num}.txt", "w") as file:
+                        file.write(user_input_path)
 
-                # plot_and_save_graphs("./example_graph_plots/", graphs_to_plot)
-                # graphs_to_plot = []
+                plot_eval_graphs("./example_graph_plots/", graphs_to_plot, eval_it="gt")
+                graphs_to_plot = []
+                print("timer waiting")
+                time.sleep(30)
 
         if rank == 0:
             print(
@@ -349,17 +360,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/c.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/p.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/u/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
@@ -393,7 +404,7 @@ if __name__ == "__main__":
         "-s",
         "--train_split",
         type=float,
-        default="0.6",
+        default="0.9",
         help="training split",
     )
 

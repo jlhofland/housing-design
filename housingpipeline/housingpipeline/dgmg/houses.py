@@ -92,7 +92,7 @@ def check_house(model, quiet=False):
     rooms = ["living_room", "bedroom", "bathroom"]
     ui_data = [
         (ui["number_of_living_rooms"],ui["living_rooms_plus?"]),
-        (ui["number_of_bedrooms"],ui["bathrooms_plus?"]),
+        (ui["number_of_bedrooms"],ui["bedrooms_plus?"]),
         (ui["number_of_bathrooms"],ui["bathrooms_plus?"]),
     ]
     for i, room in enumerate(rooms):
@@ -136,7 +136,8 @@ def check_house(model, quiet=False):
     graph_distribution = graph_direction_distribution(graphlist)
     
     for i,percentage in enumerate(graph_distribution):
-        if abs(percentage - lifull_data_distribution[i]) > 0.2 * lifull_data_distribution[i]:
+        if abs(percentage - lifull_data_distribution[i]) > 0.2:
+        # if percentage > 1.5
             issues.add("Room direction distribution is too far off the lifull distribution")
             results[4] = 1
     

@@ -512,14 +512,15 @@ def room_without_doors(graphlist):
     for i, room in enumerate(graphlist[0]): # Check each room
         room_has_door = False
         if room[0] == 0.:
-            for edg in graphlist[1]:
+            for j, edg in enumerate(graphlist[1]):
                 if edg[0] == i: # If edge is from room
-                    if graphlist[2][i][1] == 0: # If edge has door
+                    if graphlist[2][j][1] == 0: # If edge has door
                         room_has_door = True
-                    if graphlist[0][edg[2]][0] == 0.: # To node is exterior wall
+                    if graphlist[0][edg[2]][0] == 1.: # To node is exterior wall
                         if graphlist[0][edg[2]][12] == 1:
                             room_has_door = True
             if not room_has_door:
+                print(f"{room} has no door")
                 room_without_door_counter += 1
 
     return room_without_door_counter > 0

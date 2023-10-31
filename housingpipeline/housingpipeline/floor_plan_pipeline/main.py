@@ -19,32 +19,34 @@ def main(args):
     os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
     g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
-    # dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
     graph_lista = dgl_to_graphlist(g=g, user_input_path=args["input_path"])
-    # print(g)
-    with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
-        graph_listb = pickle.load(file)
+
+    # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
+    #     graph_listb = pickle.load(file)
+
+    # g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_0.bin")[0][0]
+    # graph_listc = dgl_to_graphlist(g=g, user_input_path="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/1929.json")
     
     graph_list = graph_lista
 
-    # with open(f"./pipeline_output/graph_data.txt", "w") as file:
-    #     file.write(f"Graph Data:\n\n")
-    #     for c_et in g.canonical_etypes:
-    #         if g.num_edges(c_et) > 0:
-    #             file.write(f"Edge numbers: {c_et} : {g.num_edges(c_et)}\n")
-    #             file.write(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}\n")
-    #     for nt in g.ntypes:
-    #         if g.num_nodes(nt) > 0:
-    #             file.write(f"Node features: {nt} :\n {g.nodes[nt].data}\n")
-
     with open(f"./pipeline_output/graph_data.txt", "w") as file:
         file.write(f"Graph Data:\n\n")
-        for item in graph_list:
-            if type(item) is list:
-                for subitem in item:
-                    file.write(str(subitem))
-            else:
-                file.write(str(item))
+        for c_et in g.canonical_etypes:
+            if g.num_edges(c_et) > 0:
+                file.write(f"Edge numbers: {c_et} : {g.num_edges(c_et)}\n")
+                file.write(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}\n")
+        for nt in g.ntypes:
+            if g.num_nodes(nt) > 0:
+                file.write(f"Node features: {nt} :\n {g.nodes[nt].data}\n")
+
+    # with open(f"./pipeline_output/graph_data.txt", "w") as file:
+    #     file.write(f"Graph Data:\n\n")
+    #     for item in graph_list:
+    #         if type(item) is list:
+    #             for subitem in item:
+    #                 file.write(str(subitem))
+    #         else:
+    #             file.write(str(item))
     # graph_list = []
     # mks, nds, eds, eds_f = graph_listb
     # graph_list.append(mks)
@@ -100,7 +102,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/dgmg_model_epoch_3_batch_1640.pth",
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/dataset_fix.pth",
         help="full path to pretained dgmg model",
     )
 

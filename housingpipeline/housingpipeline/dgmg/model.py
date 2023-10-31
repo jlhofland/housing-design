@@ -155,9 +155,15 @@ class GraphEmbed(nn.Module):
         self.graph_hidden_size = 4 * node_hidden_size
         self.node_hidden_size = node_hidden_size
 
+        # Try LSTM encoding all nodes and edge data
+        self.node_LSTM = LSTMEncoder(node_hidden_size, self.graph_hidden_size)
+        self.edge_LSTM = LSTMEncoder(3, self.graph_hidden_size)
+
         # Embed graphs
         self.node_gating = nn.Sequential(
             nn.Linear(node_hidden_size, 1), nn.Sigmoid())
+        self.edge_gating = nn.Sequential(
+            nn.Linear(3, 1), nn.Sigmoid())
         self.node_to_graph = nn.Linear(
             node_hidden_size, self.graph_hidden_size)
 
@@ -170,11 +176,17 @@ class GraphEmbed(nn.Module):
             # hvs = g.ndata["hv"]
             # NEW:
             hvs = torch.empty((0, self.node_hidden_size))
+            edata = torch.empty((0, 3))
             for key in g.ndata["hv"]:
                 hvs = torch.cat((hvs, g.ndata["hv"][key]), dim=0)
-            return (self.node_gating(hvs) * self.node_to_graph(hvs)).sum(
-                0, keepdim=True
-            )
+            for key in g.edata["e"]:
+                if key[1] == 'corner_edge':
+                    edata = torch.cat((edata, torch.cat([torch.zeros((g.edata["e"][key].shape[0], 1)), g.edata["e"][key]], dim=1)), dim=0)
+                elif key[1] == 'room_adjacency_edge':
+                    edata = torch.cat((edata, torch.cat([torch.ones((g.edata["e"][key].shape[0], 1)), g.edata["e"][key]], dim=1)), dim=0)
+            nodes_result = (self.node_gating(hvs) * self.node_LSTM(hvs)).sum(dim=0, keepdim=True)
+            edges_result = (self.edge_gating(edata) * self.edge_LSTM(edata)).sum(dim=0, keepdim=True)
+            return nodes_result + edges_result
 
 
 class GraphProp(nn.Module):
@@ -1162,7 +1174,7 @@ class DGMG(nn.Module):
                     "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
 
             # Close plot
-            plt.close()
+            # plt.close()
 
         # Return graph
         return self.g
