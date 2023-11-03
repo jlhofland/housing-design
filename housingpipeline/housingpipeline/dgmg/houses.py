@@ -135,11 +135,16 @@ def check_house(model, quiet=False):
     graphlist = dgl_to_graphlist(g)
     graph_distribution = graph_direction_distribution(graphlist)
     
+    # ground-truth distribution:[0.00000000 0.000347970985 0.00549958065 0.0662011909 0.927951257]
+    total_zero_and_one = 0
     for i,percentage in enumerate(graph_distribution):
-        if abs(percentage - lifull_data_distribution[i]) > 0.2:
-        # if percentage > 1.5
-            issues.add("Room direction distribution is too far off the lifull distribution")
-            results[4] = 1
+        if i > 1:
+            continue
+        total_zero_and_one += percentage
+    if total_zero_and_one > 0.000347970985:
+    # if percentage > 1.5
+        issues.add("Room direction distribution is too far off the lifull distribution")
+        results[4] = 1
     
     # # Checks whether every room in the house has a door (either to another room or connected to exterior wall with a door)
     if room_without_doors(graphlist):

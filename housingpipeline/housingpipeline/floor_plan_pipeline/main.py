@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/dataset_fix.pth",
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/best_sparkling_planet.pth",
         help="full path to pretained dgmg model",
     )
 

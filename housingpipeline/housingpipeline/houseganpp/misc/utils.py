@@ -206,6 +206,12 @@ def draw_masks(masks, real_nodes, im_size=256):
         # resize map
         m[m > 0] = 255
         m[m < 0] = 0
+    a = np.array([np.where(mask>0)[0].shape[0] for mask in masks])
+    sorted_inds = np.flip(np.argsort(a))
+    for i in sorted_inds:
+        # # resize map
+        m = masks[i]
+        nd = real_nodes[i]
         m_lg = cv2.resize(m, (im_size, im_size), interpolation=cv2.INTER_AREA)
 
         # pick color

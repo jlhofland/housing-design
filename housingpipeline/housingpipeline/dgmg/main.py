@@ -309,16 +309,15 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         # clear eval folder
         if os.path.isdir(f"./eval_graphs/"):
                 shutil.rmtree(f"./eval_graphs/")
-        # for i, user_input_path in enumerate(dataloader):
-        for i, user_input_path in enumerate(["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/input.json"]):
-            if i == 1: break
+        for i, user_input_path in enumerate(dataloader):
+        # for i, user_input_path in enumerate(["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/input.json"]):
+            if i == 10: break
             print(f"Evaluation {i}")
             lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
             # update model's user-input path
             model.user_input_path = user_input_path
             # Update model's cond vector
-            model.conditioning_vector_module.update_conditioning_vector(
-                user_input_path)
+            model.conditioning_vector_module.update_conditioning_vector(user_input_path)
             model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
             # update cond vector inside the add-node agent
             model.add_node_agent.conditioning_vector = model.conditioning_vector
