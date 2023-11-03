@@ -96,8 +96,6 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                     )
                 graphs_to_plot = []
                 for i, (user_input_path, init_data, data) in enumerate(train_data_loader):
-                    if i > 10:
-                        continue
                     if i%20  == 0:
                         print(f"PID {rank} - Beginning house {i}")
 
@@ -220,19 +218,19 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                         print(
                             f"PID: {rank} - House number {i+1} raised error {e} \nSkipping this house.")
 
-                    lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
+                    # lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
                     
-                    valid, results = check_house(model)
-                    print(f"House valid? {valid}. Results: {results}")
-                    graphs_to_plot.append(model.g)
-                    dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
-                    with open("./example_graphs/"+f"graph_{i}_house_nr_{lifull_num}.txt", "w") as file:
-                        file.write(user_input_path)
+                    # valid, results = check_house(model)
+                    # print(f"House valid? {valid}. Results: {results}")
+                    # graphs_to_plot.append(model.g)
+                    # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
+                    # with open("./example_graphs/"+f"graph_{i}_house_nr_{lifull_num}.txt", "w") as file:
+                    #     file.write(user_input_path)
 
-                plot_eval_graphs("./example_graph_plots/", graphs_to_plot, eval_it="gt")
-                graphs_to_plot = []
-                print("timer waiting")
-                time.sleep(30)
+                # plot_eval_graphs("./example_graph_plots/", graphs_to_plot, eval_it="gt")
+                # graphs_to_plot = []
+                # print("timer waiting")
+                # time.sleep(30)
 
         if rank == 0:
             print(
@@ -272,7 +270,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
     elif os.path.exists("./model.pth"):
         t1 = time.time()
         # Setup dataset and data loader
-        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final"
+        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final2"
         test_dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
         dataloader = DataLoader(
             test_dataset,
@@ -360,17 +358,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/c.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final2.pickle",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/c.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/p.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final2.pickle",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/p.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/u/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final2/",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/u/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
