@@ -1,10 +1,10 @@
 {
     "number_of_living_rooms": 1,
-    "living_rooms_plus?" : false,
+    "living_rooms_plus?" : true,
     "number_of_bedrooms": 1,
-    "bedrooms_plus?" : false,
+    "bedrooms_plus?" : true,
     "number_of_bathrooms": 1,
-    "bathrooms_plus?" : false,
+    "bathrooms_plus?" : true,
     "exterior_walls": [
         [0,0,0,0,1,1],
         [1,0,1,0,2,0],

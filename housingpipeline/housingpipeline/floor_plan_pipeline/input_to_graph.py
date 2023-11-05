@@ -49,7 +49,7 @@ def create_graph_from_user_input(user_input_path=None, model_path=None):
     # update cond vector inside the add-node agent
     model.add_node_agent.conditioning_vector = model.conditioning_vector
 
-    pipeline_graph = evaluator.generate_single_valid_graph(model=model)
+    pipeline_graph = model.forward_pipeline() #evaluator.generate_single_valid_graph(model=model)
     t2 = time.time()
     print(
         "It took {} to finish evaluation.".format(

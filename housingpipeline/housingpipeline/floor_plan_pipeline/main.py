@@ -10,43 +10,76 @@ from copy import deepcopy
 
 from housingpipeline.floor_plan_pipeline.input_to_graph import create_graph_from_user_input
 from housingpipeline.floor_plan_pipeline.graph_to_floorplan import create_floorplan_from_graph
+from housingpipeline.dgmg.utils import dgl_to_graphlist
 
 # from .input_to_graph import create_graph_from_user_input
 
 
 def main(args):
-    # os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
+    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
     g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
-    dgl.data.utils.save_graphs("./misc/sample_graph.bin", g)
-    # print(g)
-    with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
-        sample_graph_list = pickle.load(file)
+    graph_lista = dgl_to_graphlist(g=g, user_input_path=args["input_path"])
+
+    # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
+    #     graph_listb = pickle.load(file)
+
+    # g = dgl.load_graphs("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/dgmg/example_graphs/dgmg_graph_0.bin")[0][0]
+    # graph_listc = dgl_to_graphlist(g=g, user_input_path="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/1929.json")
+    
+    graph_list = graph_lista
+
+    with open(f"./pipeline_output/graph_data.txt", "w") as file:
+        file.write(f"Graph Data:\n\n")
+        for c_et in g.canonical_etypes:
+            if g.num_edges(c_et) > 0:
+                file.write(f"Edge numbers: {c_et} : {g.num_edges(c_et)}\n")
+                file.write(f"Edge features: {c_et} :\n {g.edges[c_et].data['e']}\n")
+        for nt in g.ntypes:
+            if g.num_nodes(nt) > 0:
+                file.write(f"Node features: {nt} :\n {g.nodes[nt].data}\n")
+
+    # with open(f"./pipeline_output/graph_data.txt", "w") as file:
+    #     file.write(f"Graph Data:\n\n")
+    #     for item in graph_list:
+    #         if type(item) is list:
+    #             for subitem in item:
+    #                 file.write(str(subitem))
+    #         else:
+    #             file.write(str(item))
+    # graph_list = []
+    # mks, nds, eds, eds_f = graph_listb
+    # graph_list.append(mks)
+    # mks, nds, eds, eds_f = graph_lista
+    # graph_list += [nds, eds, eds_f]
 
     # Make a copy of the graph list
     floorplan_ok = False
-    total_graph_copy = deepcopy(sample_graph_list)
+    total_graph_copy = deepcopy(graph_list)
 
     # Loop till user is satisfied with floorplan
     while not floorplan_ok:
         # Create plan
-        create_floorplan_from_graph(graph=sample_graph_list, model_path=args["hhgpp_path"], output_path=args["output_path"])
+        create_floorplan_from_graph(graph=graph_list, model_path=args["hhgpp_path"], output_path=args["output_path"])
 
         # Open image
         plan = Image.open(args["output_path"] + "/final_pipeline_floorplan.png")
         plan.show()
 
         # Check if user is satisfied with floorplan
-        response = input("Is this floorplan ok? (yes/no): ").strip().lower()
-        if response == "yes":
+        response = input("Is this floorplan ok? Pick from (continue/regenerate/stop): ").strip().lower()
+        if response == "continue":
             floorplan_ok = True
             print("Amazing your floorplan is ready and saved in the output folder.")
-        elif response == "no":
+        elif response == "regenerate":
             plan.close()
-            sample_graph_list = deepcopy(total_graph_copy)
+            graph_list = deepcopy(total_graph_copy)
             print("Alright generating a new floorplan.")
+        elif response == "stop":
+            print("No problem, try again next time. Byeee")
+            exit()
         else:
-            print("Invalid input. Please enter either 'yes' or 'no'.")
+            print("Invalid input. Please enter either 'continue', 'regenerate or 'stop'.")
 
 
 if __name__ == "__main__":
@@ -69,13 +102,14 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="./pretrained_models/dgmg_state_dict.pth",
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/best_sparkling_planet.pth",
         help="full path to pretained dgmg model",
     )
 
     parser.add_argument(
         "--hhgpp-path",
-        default="./pretrained_models/hhgpp_state_dict.pth",
+        # 123000 is best so far
+        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/gen_exp_D_283000.pth",
         help="full path to pretrained hhgpp model",
     )
 

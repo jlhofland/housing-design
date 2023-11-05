@@ -1,7 +1,8 @@
 from functools import partial
 from housingpipeline.dgmg.utils import parse_input_json, tensor_to_one_hot
-from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset
+from housingpipeline.dgmg.houses import HouseDataset, generate_home_dataset, check_house
 import housingpipeline.dgmg.draw_graph_help as draw_graph_help
+from housingpipeline.dgmg.graph_vis_test import show_graph
 
 import os
 import dgl
@@ -151,7 +152,8 @@ class GraphEmbed(nn.Module):
         super(GraphEmbed, self).__init__()
 
         # Setting from the paper
-        self.graph_hidden_size = 2 * node_hidden_size
+        self.graph_hidden_size = 4 * node_hidden_size
+        self.node_hidden_size = node_hidden_size
 
         # Embed graphs
         self.node_gating = nn.Sequential(
@@ -167,7 +169,7 @@ class GraphEmbed(nn.Module):
             # OLD:
             # hvs = g.ndata["hv"]
             # NEW:
-            hvs = torch.empty((0, 16))
+            hvs = torch.empty((0, self.node_hidden_size))
             for key in g.ndata["hv"]:
                 hvs = torch.cat((hvs, g.ndata["hv"][key]), dim=0)
             return (self.node_gating(hvs) * self.node_to_graph(hvs)).sum(
@@ -194,7 +196,7 @@ class GraphProp(nn.Module):
             # input being [hv, hu, xuv]
             message_funcs.append(
                 nn.Linear(
-                    2 * node_hidden_size + edge_features_size,
+                    2 * node_hidden_size + 1 + edge_features_size,
                     self.node_activation_hidden_size,
                 )
             )
@@ -232,7 +234,21 @@ class GraphProp(nn.Module):
         # Note that "node rep for node u is still accessed via "hv" from edgeu2v's src node.."
         # #ALEX
         # print(edges.src.keys())
-        return {"m": torch.cat([edges.src["hv"], edges.data["e"]], dim=1)}
+        if edges.canonical_etype[1] == 'corner_edge':
+            edata = torch.cat([
+                torch.zeros((edges.data['e'].shape[0], 1)),
+                edges.data["e"]
+            ],
+                dim=1
+            )
+        elif edges.canonical_etype[1] == 'room_adjacency_edge':
+            edata = torch.cat([
+                torch.ones((edges.data['e'].shape[0], 1)),
+                edges.data["e"]
+            ],
+                dim=1
+            )
+        return {"m": torch.cat([edges.src["hv"], edata], dim=1)}
 
     def dgmg_reduce(self, nodes, round):
         hv_old = nodes.data["hv"]
@@ -438,7 +454,7 @@ class PredictFeatures(nn.Module):
             [
                 FeatPredict(
                     graph_embed_hidden_size + 2 * node_hidden_size,
-                    16,
+                    int((graph_embed_hidden_size + 2 * node_hidden_size)/2),
                     num_edge_feature_classes,
                 )
                 for num_edge_feature_classes in num_edge_feature_classes_list
@@ -467,6 +483,7 @@ class ChooseDestAndUpdate(nn.Module):
 
         self.graph_op = {"embed": graph_embed_func, "prop": graph_prop_func}
         self.choose_dest = nn.Linear(2 * node_hidden_size, 1)
+        self.node_hidden_size = node_hidden_size
 
         self.feature_loss = nn.CrossEntropyLoss()
 
@@ -490,7 +507,9 @@ class ChooseDestAndUpdate(nn.Module):
         # feature logits: (num_edge_features, num_classes) predictions
         # true_classes: (num_edge_features) true feature classes
 
-        loss = self.feature_loss(feature_logits, true_classes)
+        # loss1 = self.feature_loss(feature_logits, true_classes)
+        loss = F.log_softmax(feature_logits, dim=1)[np.arange(
+            true_classes.shape[0]), true_classes].sum()
 
         return loss
 
@@ -510,9 +529,9 @@ class ChooseDestAndUpdate(nn.Module):
 
         # Create src and possible destination lists to compute "likelihood scores"
         src_embed_expand = (
-            g.nodes[src_type].data["hv"][-1].expand(g.num_nodes() - 1, -1)
+            g.nodes[src_type].data["hv"][src_id].expand(g.num_nodes() - 1, -1)
         )
-        possible_dests_embed = torch.empty((0, 16))
+        possible_dests_embed = torch.empty((0, self.node_hidden_size))
         # Create mapping from chosen "dest_id" back to real dest id/type
         mapping = [[], []]
         reference_list = []  # to determine corresponding index for ground truth
@@ -663,7 +682,7 @@ class apply_partial_graph_input_completion(nn.Module):
         self.room_types = room_types
         self.canonical_edge_types = canonical_edge_types
         self.gen_houses_dataset_only = gen_houses_dataset_only
-        self.g = None
+        self.g : dgl.DGLHeteroGraph = None
 
     def define_empty_typed_graph(self, ntypes, canonical_edge_types, edge_feature_size):
         def remove_all_edges(g):
@@ -1081,7 +1100,7 @@ class DGMG(nn.Module):
 
         return self.g
 
-    def forward(self, init_actions=None, actions=None, user_interface=False):
+    def forward_pipeline(self, user_interface=True):
         # The graph we will work on
         self.g = self.partial_graph_agent(self.user_input_path)
 
@@ -1089,40 +1108,15 @@ class DGMG(nn.Module):
         self.graph_prop.canonical_etypes = [
             cet for cet in self.g.canonical_etypes]
 
-        # Right now, the nodes do not have 'hv' or 'a' features.
-        # Would like to initialize these features for all added nodes in the partial graph
-        # We use the AddNode agent nn's to do this.
-        self.initialize_partial_graph_node_features()
+        self.initialize_partial_graph_node_representations()
 
-        if self.training:
-            self.prepare_for_train()
-            self.finalize_partial_graph_train(init_actions)
-            return self.forward_train(actions)
-
-        if not self.training and user_interface == True:
+        if user_interface:
             # Set default to false
             partial_ok = False
 
             # Loop until user is satisfied with the graph or exits
             while not partial_ok:
-                # Add legenda to plot
-                plt.figure(figsize=(10, 10))
-                plt.legend(
-                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
-
-                # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(
-                    self.g)
-
-                # Translate to Homogeneous graph
-                hg = dgl.to_homogeneous(self.g)
-
-                # Convert to networkx
-                ng = hg.to_networkx()
-
-                # Draw the graph
-                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-                plt.show(block=False)
+                show_graph(self.g, self.user_input_path)
 
                 # Ask the user if the plot is correct
                 response = input(
@@ -1135,79 +1129,72 @@ class DGMG(nn.Module):
                 else:
                     print("Invalid input. Please enter either 'yes' or 'no'.")
 
-        # # Uncomment to print out partial graph
-        # for c_et in self.g.canonical_etypes:
-        #     if self.g.num_edges(c_et) > 0:
-        #         print(f"Edge numbers: {c_et} : {self.g.num_edges(c_et)}")
-        #         print(f"Edge features: {c_et} :\n {self.g.edges[c_et].data['e']}")
-        # for nt in self.g.ntypes:
-        #     if self.g.num_nodes(nt) > 0:
-        #         print(f"Node features: {nt} :\n {self.g.nodes[nt].data}")
+        # save a copy to disk and load a new one when needed.
+        dgl.save_graphs("./tmp/partial_graph.bin", self.g)
 
-        # Finalize the partial graph
-        self.finalize_partial_graph_inference()
+        # Set default to false
+        complete_ok = False
 
-        if not user_interface:
-            return self.forward_inference()
+        # Loop until user is satisfied with the graph
+        while not complete_ok:
+
+            found_one = False
+            if not found_one:
+                self.forward()
+                found_one, _ = check_house(self, quiet=False)
+                if not found_one:
+                    print("House didn't pass tests, regenerating.")
+            show_graph(self.g, self.user_input_path)
+
+            # Ask the user if the plot is correct
+            response = input(
+                "What would you like to do? (continue/regenerate/stop): ").strip().lower()
+            if response == 'continue':
+                complete_ok = True
+            elif response == 'regenerate':
+                print("You got it!")
+                # self.g : dgl.DGLGraph = dgl.load_graphs("./tmp/partial_graph.bin")[0][0]
+            elif response == 'stop':
+                print("Exiting the program.")
+                exit()
+            else:
+                print(
+                    "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
+
+            # Close plot
+            plt.close()
+
+        # Return graph
+        return self.g
+
+    def forward(self, init_actions=None, actions=None):
+        # The graph we will work on
+        self.g = self.partial_graph_agent(self.user_input_path)
+
+        # Add a list of canonical_etypes for use by Graph prop...
+        self.graph_prop.canonical_etypes = [
+            cet for cet in self.g.canonical_etypes]
+
+        # Right now, the nodes do not have 'hv' or 'a' features.
+        # Would like to initialize these features for all added nodes in the partial graph
+        # We use the AddNode agent nn's to do this.
+        self.initialize_partial_graph_node_representations()
+
+        if self.training:
+            self.prepare_for_train()
+            # also perform a graph propagation after partial graph init
+            self.graph_prop(self.g)
+            self.finalize_partial_graph_train(init_actions)
+            return self.forward_train(actions)
 
         else:
-            # because "copying" the graph is too hard, save a copy to disk and load a new one when needed.
-            dgl.save_graphs("./tmp/partial_graph.bin", self.g)
-            # make copy so that we can set back the partial graph
+            # Finalize the partial graph
+            # also perform a graph propagation after partial graph init
+            self.graph_prop(self.g)
+            self.finalize_partial_graph_inference()
+            return self.forward_inference()
 
-            # partial_copy : dgl.DGLGraph = dgl.edge_type_subgraph(self.g, self.g.canonical_etypes)
-            # partial_copy : dgl.DGLGraph = copy.deepcopy(self.g)
-
-
-            # Set default to false
-            complete_ok = False
-
-            # Loop until user is satisfied with the graph
-            while not complete_ok:
-
-                # forward inference
-                self.forward_inference()
-
-                # Add legenda to plot
-                plt.figure(figsize=(10, 10))
-                plt.legend(
-                    handles=draw_graph_help.get_legend_elements(), loc='upper right')
-
-                # Get labels and colors
-                labels, colors = draw_graph_help.assign_node_labels_and_colors(
-                    self.g)
-
-                # Translate to Homogeneous graph
-                hg = dgl.to_homogeneous(self.g)
-
-                # Convert to networkx
-                ng = hg.to_networkx()
-
-                # Draw the graph
-                nx.draw(ng, node_color=colors, labels=labels, font_size=7)
-                plt.show(block=False)
-
-                # Ask the user if the plot is correct
-                response = input(
-                    "What would you like to do? (continue/regenerate/stop): ").strip().lower()
-                if response == 'continue':
-                    complete_ok = True
-                elif response == 'regenerate':
-                    self.g : dgl.DGLGraph = dgl.load_graphs("./empty_house_graph/empty_house_graph.bin")[0][0]
-                elif response == 'stop':
-                    print("Exiting the program.")
-                    exit()
-                else:
-                    print(
-                        "Invalid input. Please enter either 'continue', 'regenerate' or 'stop'.")
-
-                # Close plot
-                plt.close()
-
-            # Return graph
-            return self.g
-
-    def initialize_partial_graph_node_features(self):
+    def initialize_partial_graph_node_representations(self):
         for ntype in self.g.ntypes:
             if self.g.num_nodes(ntype) > 0:
                 # First, initialize features with garbage to make dgl happy
@@ -1239,6 +1226,7 @@ class DGMG(nn.Module):
                             dim=1,
                         )
                     )
+                    self.g.nodes[ntype].data["hv"][i] = node_hv
 
     def finalize_partial_graph_train(self, init_actions):
         # with open("./ALEX/see_order.txt", "a") as file:

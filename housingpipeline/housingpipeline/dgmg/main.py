@@ -10,10 +10,11 @@ import time
 import os
 import wandb
 import shutil
+import dgl
 
 import torch
 import torch.multiprocessing as mp
-from housingpipeline.dgmg.houses import plot_eval_graphs
+from housingpipeline.dgmg.houses import plot_eval_graphs, check_house
 from housingpipeline.dgmg.model import DGMG
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
@@ -33,14 +34,14 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         train_data_loader = DataLoader(
             train_dataset,
             batch_size=1,
-            shuffle=True,
+            shuffle=False,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
         eval_data_loader = DataLoader(
             eval_dataset,
             batch_size=1,
-            shuffle=False,
+            shuffle=True,
             num_workers=0,
             collate_fn=dataset.collate_single,
         )
@@ -132,7 +133,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                                 epoch + 1, loss_averaged.item(), prob_averaged.item()
                             )
 
-                        if rank == 0 and i%(opts["batch_size"]/2) == 0:
+                        if rank == 0 and i%opts["batch_size"] == 0:
                             print(
                                 f"PID {rank}: Finished training on house {(i)} with batch size: {opts['batch_size']}"
                             )
@@ -217,11 +218,19 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
                         print(
                             f"PID: {rank} - House number {i+1} raised error {e} \nSkipping this house.")
 
+                    # lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
+                    
+                    # valid, results = check_house(model)
+                    # print(f"House valid? {valid}. Results: {results}")
                     # graphs_to_plot.append(model.g)
                     # dgl.save_graphs("./example_graphs/dgmg_graph_"+str(i)+".bin", [model.g])
+                    # with open("./example_graphs/"+f"graph_{i}_house_nr_{lifull_num}.txt", "w") as file:
+                    #     file.write(user_input_path)
 
-                # plot_and_save_graphs("./example_graph_plots/", graphs_to_plot)
+                # plot_eval_graphs("./example_graph_plots/", graphs_to_plot, eval_it="gt")
                 # graphs_to_plot = []
+                # print("timer waiting")
+                # time.sleep(30)
 
         if rank == 0:
             print(
@@ -261,7 +270,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
     elif os.path.exists("./model.pth"):
         t1 = time.time()
         # Setup dataset and data loader
-        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_new_ids"
+        eval_ui_path = "/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final2"
         test_dataset = CustomDataset(user_input_folder=eval_ui_path, eval_only=True)
         dataloader = DataLoader(
             test_dataset,
@@ -301,14 +310,14 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
         if os.path.isdir(f"./eval_graphs/"):
                 shutil.rmtree(f"./eval_graphs/")
         for i, user_input_path in enumerate(dataloader):
-            if i == 5: break
+        # for i, user_input_path in enumerate(["/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/input.json"]):
+            if i == 10: break
             print(f"Evaluation {i}")
             lifull_num = user_input_path[user_input_path.rfind('/')+1:-5]
             # update model's user-input path
             model.user_input_path = user_input_path
             # Update model's cond vector
-            model.conditioning_vector_module.update_conditioning_vector(
-                user_input_path)
+            model.conditioning_vector_module.update_conditioning_vector(user_input_path)
             model.conditioning_vector = model.conditioning_vector_module.conditioning_vector
             # update cond vector inside the add-node agent
             model.add_node_agent.conditioning_vector = model.conditioning_vector
@@ -318,7 +327,7 @@ def main(rank=None, model=None, opts=None, run=None, train_dataset=None, eval_da
             shutil.copy(user_input_path, f"./eval_graphs/{lifull_num}/")
             evaluator.rollout_and_examine(
                 model, opts["num_generated_samples"], eval_it=i, run=run, lifull_num=lifull_num)
-            evaluator.write_summary(eval_it=i, run=run, cli_only=True, lifull_num=lifull_num)
+            evaluator.write_summary(eval_it=i, run=run, cli_only=False, lifull_num=lifull_num)
         t2 = time.time()
         del model.g
         print(
@@ -348,17 +357,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path-to-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/completed_graphs_final2.pickle",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/c.pickle",
     )
     parser.add_argument(
         "--path-to-initialization-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final.pickle",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/partial_graphs_final2.pickle",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/p.pickle",
     )
     parser.add_argument(
         "--path-to-ui-dataset",
         type=str,
-        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final/",
+        default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/user_inputs_final2/",
+        # default="/home/evalexii/Documents/IAAIP/datasets/dgmg_datasets/u/",
     )
     parser.add_argument(
         "--path-to-user-input-file-inference",
@@ -392,7 +404,7 @@ if __name__ == "__main__":
         "-s",
         "--train_split",
         type=float,
-        default="0.6",
+        default="0.9",
         help="training split",
     )
 
@@ -400,7 +412,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval_int",
         type=int,
-        default="10",
+        default="200",
         help="number of training houses before eval houses",
     )
 
@@ -432,7 +444,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=20,  # ALEX 10
+        default=10,  # ALEX 10
         help="batch size to use for training",
     )
     parser.add_argument(
