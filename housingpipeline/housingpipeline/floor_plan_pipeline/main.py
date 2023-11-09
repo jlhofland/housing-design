@@ -16,7 +16,7 @@ from housingpipeline.dgmg.utils import dgl_to_graphlist
 
 
 def main(args):
-    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/")
+    os.chdir(args["dir"] + "/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
     g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
     graph_lista = dgl_to_graphlist(g=g, user_input_path=args["input_path"])
@@ -84,9 +84,15 @@ def main(args):
 
 if __name__ == "__main__":
     
-    os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline")
+    # os.chdir("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline")
 
     parser = argparse.ArgumentParser(description="Full Pipeline")
+
+    parser.add_argument(
+        "--dir",
+        default="/home/evalexii/Documents/IAAIPss/housing-design/",
+        help="absolute path to repo",
+    )
 
     parser.add_argument(
         "--input-path",
@@ -102,14 +108,14 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dgmg-path",
-        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/best_sparkling_planet.pth",
+        default="./pretrained_models/best_sparkling_planet.pth",
         help="full path to pretained dgmg model",
     )
 
     parser.add_argument(
         "--hhgpp-path",
         # 123000 is best so far
-        default="/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/gen_exp_D_283000.pth",
+        default="./pretrained_models/gen_exp_D_283000.pth",
         help="full path to pretrained hhgpp model",
     )
 
