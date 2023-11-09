@@ -1139,7 +1139,7 @@ class DGMG(nn.Module):
         while not complete_ok:
 
             found_one = False
-            if not found_one:
+            while not found_one:
                 self.forward()
                 found_one, _ = check_house(self, quiet=False)
                 if not found_one:

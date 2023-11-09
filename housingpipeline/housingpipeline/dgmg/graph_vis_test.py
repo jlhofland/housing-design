@@ -22,8 +22,8 @@ correct = False
 
 def show_graph(g, user_input_path):
     # Add legenda to plot
-    plt.figure(figsize=(10, 10))
-    plt.legend(handles=draw_graph_help.get_legend_elements(), loc='upper right')
+    plt.figure(figsize=(25, 25))
+    plt.legend(handles=draw_graph_help.get_legend_elements(), loc='best')
 
     # Get labels and colors
     labels, colors, walls = draw_graph_help.assign_node_labels_and_colors(g)
