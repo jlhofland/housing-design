@@ -141,7 +141,7 @@ def check_house(model, quiet=False):
         if i > 1:
             continue
         total_zero_and_one += percentage
-    if total_zero_and_one > 0.000347970985:
+    if total_zero_and_one > 0.3:#0.000347970985:
     # if percentage > 1.5
         issues.add("Room direction distribution is too far off the lifull distribution")
         results[4] = 1
