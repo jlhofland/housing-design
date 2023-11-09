@@ -18,8 +18,10 @@ from housingpipeline.dgmg.utils import dgl_to_graphlist
 def main(args):
     os.chdir(args["dir"] + "/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
-    g = create_graph_from_user_input(user_input_path=args["input_path"], model_path=args["dgmg_path"])
-    graph_lista = dgl_to_graphlist(g=g, user_input_path=args["input_path"])
+    print(args["dir"]+args["input_path"])
+
+    g = create_graph_from_user_input(user_input_path=args["dir"]+args["input_path"], model_path=args["dir"]+args["dgmg_path"])
+    graph_lista = dgl_to_graphlist(g=g, user_input_path=args["dir"]+args["input_path"])
 
     # with open("/home/evalexii/Documents/IAAIP/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/misc/sample_graph_list.p", "rb") as file:
     #     graph_listb = pickle.load(file)
@@ -60,10 +62,10 @@ def main(args):
     # Loop till user is satisfied with floorplan
     while not floorplan_ok:
         # Create plan
-        create_floorplan_from_graph(graph=graph_list, model_path=args["hhgpp_path"], output_path=args["output_path"])
+        create_floorplan_from_graph(graph=graph_list, model_path=args["dir"]+args["hhgpp_path"], output_path=args["dir"]+args["output_path"])
 
         # Open image
-        plan = Image.open(args["output_path"] + "/final_pipeline_floorplan.png")
+        plan = Image.open(args["dir"]+args["output_path"] + "/final_pipeline_floorplan.png")
         plan.show()
 
         # Check if user is satisfied with floorplan
@@ -90,32 +92,32 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dir",
-        default="/home/evalexii/Documents/IAAIPss/housing-design/",
+        default="/home/evalexii/Documents/IAAIP/housing-design/",
         help="absolute path to repo",
     )
 
     parser.add_argument(
         "--input-path",
-        default="./input.json",
+        default="/housingpipeline/housingpipeline/floor_plan_pipeline/input.json",
         help="full path to user-input file",
     )
 
     parser.add_argument(
         "--output-path",
-        default="./pipeline_output/",
+        default="/housingpipeline/housingpipeline/floor_plan_pipeline/pipeline_output/",
         help="full path to user-input file",
     )
 
     parser.add_argument(
         "--dgmg-path",
-        default="./pretrained_models/best_sparkling_planet.pth",
+        default="/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/best_sparkling_planet.pth",
         help="full path to pretained dgmg model",
     )
 
     parser.add_argument(
         "--hhgpp-path",
         # 123000 is best so far
-        default="./pretrained_models/gen_exp_D_283000.pth",
+        default="/housingpipeline/housingpipeline/floor_plan_pipeline/pretrained_models/gen_exp_D_283000.pth",
         help="full path to pretrained hhgpp model",
     )
 
