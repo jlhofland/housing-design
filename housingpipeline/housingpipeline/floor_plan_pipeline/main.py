@@ -18,7 +18,7 @@ from housingpipeline.dgmg.utils import dgl_to_graphlist
 def main(args):
     os.chdir(args["dir"] + "/housingpipeline/housingpipeline/floor_plan_pipeline/")
 
-    print(args["dir"]+args["input_path"])
+    os.makedirs(args["dir"]+args["output_path"], exist_ok=True)
 
     g = create_graph_from_user_input(user_input_path=args["dir"]+args["input_path"], model_path=args["dir"]+args["dgmg_path"])
     graph_lista = dgl_to_graphlist(g=g, user_input_path=args["dir"]+args["input_path"])
