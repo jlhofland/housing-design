@@ -12,6 +12,11 @@ cd housing-design/
 conda env create -f environment.yml
 y
 conda activate house
+pip install matplotlib
+pip install scikit-image
+pip install opencv-python
+pip install svgwrite
+pip install webcolors
 ```
 ### 3. Install our python package
 ```
