@@ -25,11 +25,13 @@ pip install .
 ```
 
 ## Steps to run housing design pipeline
-```
-cd ~/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline
-python main.py
-```
 At this point, the user will need to edit files that contain hard-coded file paths to redirect to their install directory.
 This includes:
 * Line 95 in /housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/main.py
 * Line 38 in /housing-design/housingpipeline/housingpipeline/floor_plan_pipeline/input_to_graph.py
+
+Then, the user may run the following:
+```
+cd ~/housing-design/housingpipeline/housingpipeline/floor_plan_pipeline
+python main.py
+```
