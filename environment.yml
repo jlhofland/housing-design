@@ -1,4 +1,4 @@
-name: dgmg
+name: house
 channels:
   - pytorch
   - dglteam/label/cu117
